@@ -15,6 +15,45 @@ import { Ionicons } from '@expo/vector-icons';
 const ProfileScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('posts');
   const [showEditModal, setShowEditModal] = useState(false);
+  
+  // Mock saved collections data - In real app, this would come from shared state/context
+  const savedCollections = [
+    {
+      id: '1',
+      name: 'Health Tips',
+      icon: '💡',
+      color: '#FF6B6B',
+      posts: [
+        { id: '1', image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?w=400', caption: 'Stay hydrated! Drink at least 8 glasses of water daily 💧' },
+        { id: '3', image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400', caption: 'Daily exercise routine for better health 🏃‍♂️' },
+      ],
+    },
+    {
+      id: '2',
+      name: 'Recipes',
+      icon: '🍎',
+      color: '#4ECDC4',
+      posts: [
+        { id: '2', image: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400', caption: 'Healthy breakfast ideas for energy' },
+      ],
+    },
+    {
+      id: '3',
+      name: 'Workouts',
+      icon: '💪',
+      color: '#45B7D1',
+      posts: [],
+    },
+    {
+      id: '4',
+      name: 'Mental Health',
+      icon: '🧘',
+      color: '#96CEB4',
+      posts: [
+        { id: '4', image: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=400', caption: 'Mental health matters! Practice mindfulness daily 🧘‍♀️' },
+      ],
+    },
+  ];
 
   const user = {
     name: 'Your Name',
@@ -93,6 +132,33 @@ const ProfileScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
+  const renderSavedCollection = ({ item: collection }) => (
+    <View style={styles.collectionCard}>
+      <View style={styles.collectionHeader}>
+        <View style={[styles.collectionIconLarge, { backgroundColor: collection.color + '20' }]}>
+          <Text style={styles.collectionIconEmoji}>{collection.icon}</Text>
+        </View>
+        <View style={styles.collectionInfo}>
+          <Text style={styles.collectionTitle}>{collection.name}</Text>
+          <Text style={styles.collectionCount}>{collection.posts.length} saved</Text>
+        </View>
+      </View>
+      {collection.posts.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.collectionPosts}>
+          {collection.posts.map((post) => (
+            <TouchableOpacity key={post.id} style={styles.savedPostItem}>
+              <Image source={{ uri: post.image }} style={styles.savedPostImage} />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      ) : (
+        <View style={styles.emptyCollection}>
+          <Text style={styles.emptyCollectionText}>No posts saved yet</Text>
+        </View>
+      )}
+    </View>
+  );
+
   const renderContent = () => {
     if (activeTab === 'posts') {
       return (
@@ -121,6 +187,15 @@ const ProfileScreen = ({ navigation }) => {
         <FlatList
           data={articles}
           renderItem={renderArticleItem}
+          keyExtractor={(item) => item.id}
+          scrollEnabled={false}
+        />
+      );
+    } else if (activeTab === 'saved') {
+      return (
+        <FlatList
+          data={savedCollections}
+          renderItem={renderSavedCollection}
           keyExtractor={(item) => item.id}
           scrollEnabled={false}
         />
@@ -211,6 +286,16 @@ const ProfileScreen = ({ navigation }) => {
             name="document-text"
             size={20}
             color={activeTab === 'articles' ? '#007AFF' : '#666'}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'saved' && styles.activeTab]}
+          onPress={() => setActiveTab('saved')}
+        >
+          <Ionicons
+            name="bookmark"
+            size={20}
+            color={activeTab === 'saved' ? '#007AFF' : '#666'}
           />
         </TouchableOpacity>
       </View>
@@ -489,6 +574,66 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  collectionCard: {
+    backgroundColor: '#fff',
+    marginBottom: 20,
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  collectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  collectionIconLarge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 15,
+  },
+  collectionIconEmoji: {
+    fontSize: 28,
+  },
+  collectionInfo: {
+    flex: 1,
+  },
+  collectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 4,
+  },
+  collectionCount: {
+    fontSize: 14,
+    color: '#666',
+  },
+  collectionPosts: {
+    marginTop: 10,
+  },
+  savedPostItem: {
+    width: 120,
+    height: 120,
+    marginRight: 10,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  savedPostImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f0f0f0',
+  },
+  emptyCollection: {
+    padding: 30,
+    alignItems: 'center',
+  },
+  emptyCollectionText: {
+    fontSize: 14,
+    color: '#999',
   },
 });
 

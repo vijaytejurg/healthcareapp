@@ -20,6 +20,9 @@ import UserProfileScreen from './screens/UserProfileScreen';
 import ConsultationChatScreen from './screens/ConsultationChatScreen';
 import MedicineOrderScreen from './screens/MedicineOrderScreen';
 import OrderTrackingScreen from './screens/OrderTrackingScreen';
+import HospitalBookingScreen from './screens/HospitalBookingScreen';
+import AmbulanceScreen from './screens/AmbulanceScreen';
+import ArticlesScreen from './screens/ArticlesScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -94,6 +97,9 @@ export default function App() {
         <Stack.Screen name="ConsultationChat" component={ConsultationChatScreen} />
         <Stack.Screen name="MedicineOrder" component={MedicineOrderScreen} />
         <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
+        <Stack.Screen name="HospitalBooking" component={HospitalBookingScreen} />
+        <Stack.Screen name="Ambulance" component={AmbulanceScreen} />
+        <Stack.Screen name="Articles" component={ArticlesScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

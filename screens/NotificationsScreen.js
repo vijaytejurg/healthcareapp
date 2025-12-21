@@ -89,6 +89,16 @@ const NotificationsScreen = ({ navigation }) => {
       navigation.navigate('MedicineOrder');
     } else if (notification.type === 'donor') {
       navigation.navigate('Donor');
+    } else if (notification.type === 'pharmacy_acceptance') {
+      // Navigate to Medicine screen and trigger payment
+      navigation.navigate('MainTabs', {
+        screen: 'Medicine',
+        params: {
+          pharmacyAcceptance: notification.pharmacy,
+          cart: notification.cart,
+          goToPayment: true,
+        },
+      });
     }
   };
 
