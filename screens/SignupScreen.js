@@ -13,19 +13,8 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from '../src/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-
-// User roles
-const USER_ROLES = {
-  DOCTOR: 'doctor',
-  PATIENT: 'patient',
-  BLOOD_DONOR: 'blood_donor',
-  MEDICINE_DELIVERY: 'medicine_delivery',
-  AMBULANCE_DRIVER: 'ambulance_driver',
-  ADMIN: 'admin',
-};
+import { createUserAccount } from '../utils/userService';
+import { USER_ROLES } from '../utils/constants';
 
 export default function SignupScreen({ navigation }) {
   const [step, setStep] = useState(1); // 1: Basic info, 2: Role selection, 3: Role-specific fields
@@ -133,71 +122,49 @@ export default function SignupScreen({ navigation }) {
     return true;
   };
 
-  // Create user profile in Firestore
-  const createUserProfile = async (userCredential) => {
-    const user = userCredential.user;
-    const userData = {
-      uid: user.uid,
-      name: fullName.trim(),
-      email: email.trim().toLowerCase(),
-      role: selectedRole,
-      profilePhoto: null,
-      createdAt: serverTimestamp(),
-      isActive: true,
-      verificationStatus: selectedRole === USER_ROLES.DOCTOR ? 'pending' : 'verified',
-      // Role-specific fields
-      ...(selectedRole === USER_ROLES.DOCTOR && {
-        specialization: roleFields.specialization.trim(),
-        licenseNumber: roleFields.licenseNumber.trim(),
-        hospitalName: roleFields.hospitalName.trim(),
-        verified: false,
-      }),
-      ...(selectedRole === USER_ROLES.PATIENT && {
-        age: parseInt(roleFields.age),
-        gender: roleFields.gender,
-        bloodGroup: roleFields.bloodGroup,
-      }),
-      ...(selectedRole === USER_ROLES.BLOOD_DONOR && {
-        bloodGroup: roleFields.bloodGroup,
-        availabilityStatus: roleFields.availabilityStatus,
-      }),
-      ...(selectedRole === USER_ROLES.MEDICINE_DELIVERY && {
-        serviceArea: roleFields.serviceArea.trim(),
-      }),
-      ...(selectedRole === USER_ROLES.AMBULANCE_DRIVER && {
-        vehicleNumber: roleFields.vehicleNumber.trim(),
-      }),
-    };
-
-    try {
-      await setDoc(doc(db, 'users', user.uid), userData);
-      return true;
-    } catch (error) {
-      console.error('Error creating user profile:', error);
-      throw error;
-    }
-  };
-
   // Handle signup
   const handleSignup = async () => {
     if (!validateRoleFields()) return;
 
     setLoading(true);
     try {
-      // Create Firebase Auth user
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Use the userService to create account with beautiful architecture
+      const userData = {
+        name: fullName.trim(),
+        role: selectedRole,
+        ...(selectedRole === USER_ROLES.DOCTOR && {
+          specialization: roleFields.specialization.trim(),
+          licenseNumber: roleFields.licenseNumber.trim(),
+          hospitalName: roleFields.hospitalName.trim(),
+        }),
+        ...(selectedRole === USER_ROLES.PATIENT && {
+          age: parseInt(roleFields.age),
+          gender: roleFields.gender,
+          bloodGroup: roleFields.bloodGroup,
+        }),
+        ...(selectedRole === USER_ROLES.BLOOD_DONOR && {
+          bloodGroup: roleFields.bloodGroup,
+          availabilityStatus: roleFields.availabilityStatus,
+        }),
+        ...(selectedRole === USER_ROLES.MEDICINE_DELIVERY && {
+          serviceArea: roleFields.serviceArea.trim(),
+        }),
+        ...(selectedRole === USER_ROLES.AMBULANCE_DRIVER && {
+          vehicleNumber: roleFields.vehicleNumber.trim(),
+          serviceArea: roleFields.serviceArea?.trim(),
+        }),
+        ...(selectedRole === USER_ROLES.PHARMACY_SHOP && {
+          shopName: roleFields.shopName.trim(),
+          licenseNumber: roleFields.licenseNumber.trim(),
+          serviceArea: roleFields.serviceArea?.trim(),
+        }),
+      };
+
+      await createUserAccount(email, password, userData);
       
-      // Create user profile in Firestore
-      await createUserProfile(userCredential);
-      
-      Alert.alert('Success', 'Account created successfully!', [
-        {
-          text: 'OK',
-          onPress: () => {
-            // Navigation will be handled by auth state listener in App.js
-          },
-        },
-      ]);
+      // Account created successfully - navigation will happen automatically
+      // via auth state listener in App.js
+      // No need for alert, just let it navigate
     } catch (error) {
       let errorMessage = 'Sign up failed. Please try again.';
       if (error.code === 'auth/email-already-in-use') {
@@ -218,9 +185,10 @@ export default function SignupScreen({ navigation }) {
     const roles = [
       { id: USER_ROLES.DOCTOR, name: 'Doctor', icon: 'medical', color: '#007AFF', description: 'Provide consultations' },
       { id: USER_ROLES.PATIENT, name: 'Patient', icon: 'person', color: '#34C759', description: 'Book appointments' },
-      { id: USER_ROLES.BLOOD_DONOR, name: 'Blood Donor', icon: 'water', color: '#FF3B30', description: 'Help save lives' },
-      { id: USER_ROLES.MEDICINE_DELIVERY, name: 'Delivery Partner', icon: 'bicycle', color: '#FF9500', description: 'Deliver medicines' },
+      { id: USER_ROLES.PHARMACY_SHOP, name: 'Pharmacy Shop', icon: 'storefront', color: '#FF9500', description: 'Manage pharmacy' },
       { id: USER_ROLES.AMBULANCE_DRIVER, name: 'Ambulance Driver', icon: 'car', color: '#5856D6', description: 'Emergency services' },
+      { id: USER_ROLES.BLOOD_DONOR, name: 'Blood Donor', icon: 'water', color: '#FF3B30', description: 'Help save lives' },
+      { id: USER_ROLES.MEDICINE_DELIVERY, name: 'Delivery Partner', icon: 'bicycle', color: '#AF52DE', description: 'Deliver medicines' },
     ];
 
     return (
@@ -401,16 +369,63 @@ export default function SignupScreen({ navigation }) {
         )}
 
         {selectedRole === USER_ROLES.AMBULANCE_DRIVER && (
-          <View style={styles.inputContainer}>
-            <Ionicons name="car-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Vehicle Number"
-              placeholderTextColor="#999"
-              value={roleFields.vehicleNumber}
-              onChangeText={(value) => updateRoleField('vehicleNumber', value)}
-            />
-          </View>
+          <>
+            <View style={styles.inputContainer}>
+              <Ionicons name="car-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Vehicle Number"
+                placeholderTextColor="#999"
+                value={roleFields.vehicleNumber}
+                onChangeText={(value) => updateRoleField('vehicleNumber', value)}
+              />
+            </View>
+            <View style={styles.inputContainer}>
+              <Ionicons name="location-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Service Area (e.g., Downtown, North Zone)"
+                placeholderTextColor="#999"
+                value={roleFields.serviceArea}
+                onChangeText={(value) => updateRoleField('serviceArea', value)}
+              />
+            </View>
+          </>
+        )}
+
+        {selectedRole === USER_ROLES.PHARMACY_SHOP && (
+          <>
+            <View style={styles.inputContainer}>
+              <Ionicons name="storefront-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Shop Name"
+                placeholderTextColor="#999"
+                value={roleFields.shopName}
+                onChangeText={(value) => updateRoleField('shopName', value)}
+              />
+            </View>
+            <View style={styles.inputContainer}>
+              <Ionicons name="document-text-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="License Number"
+                placeholderTextColor="#999"
+                value={roleFields.licenseNumber}
+                onChangeText={(value) => updateRoleField('licenseNumber', value)}
+              />
+            </View>
+            <View style={styles.inputContainer}>
+              <Ionicons name="location-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Service Area / Location"
+                placeholderTextColor="#999"
+                value={roleFields.serviceArea}
+                onChangeText={(value) => updateRoleField('serviceArea', value)}
+              />
+            </View>
+          </>
         )}
 
         <View style={styles.buttonRow}>

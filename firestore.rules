@@ -1,142 +1,460 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to get user role
+    
+    // ============================================
+    // GLOBAL HELPER FUNCTIONS
+    // ============================================
+    
+    // Get user role from main users collection
+    // Returns null if user doesn't exist or not authenticated
     function getUserRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      return request.auth != null 
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role 
+        : null;
     }
     
-    // Helper function to check if user is admin
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user is admin
     function isAdmin() {
-      return getUserRole() == 'admin';
+      return isAuthenticated() && getUserRole() == 'admin';
     }
     
-    // Helper function to check if user is doctor
+    // Check if user is doctor
     function isDoctor() {
-      return getUserRole() == 'doctor';
+      return isAuthenticated() && getUserRole() == 'doctor';
     }
     
-    // Helper function to check if user is patient
+    // Check if user is patient
     function isPatient() {
-      return getUserRole() == 'patient';
+      return isAuthenticated() && getUserRole() == 'patient';
     }
     
-    // Users collection - users can read their own profile, update their own profile
+    // Check if user is verified doctor (can post medical advice)
+    function isVerifiedDoctor() {
+      return isDoctor() 
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == 'verified';
+    }
+    
+    // Check if user owns a resource
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Check if user can impersonate (prevented)
+    function cannotImpersonate(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // ============================================
+    // USERS COLLECTION (users/{userId})
+    // ============================================
     match /users/{userId} {
       // Users can read their own profile
-      allow read: if request.auth != null && request.auth.uid == userId;
-      // Users can update their own profile (except role and verificationStatus)
-      allow update: if request.auth != null 
-        && request.auth.uid == userId
-        && !('role' in request.resource.data.diff(resource.data).affectedKeys())
-        && !('verificationStatus' in request.resource.data.diff(resource.data).affectedKeys());
-      // Only admins can create/delete user profiles
-      allow create, delete: if isAdmin();
+      allow read: if isAuthenticated() && isOwner(userId);
+      
       // Users can create their own profile during signup
-      allow create: if request.auth != null && request.auth.uid == userId;
+      // Must match authenticated user ID (prevents impersonation)
+      allow create: if isAuthenticated() 
+        && cannotImpersonate(userId)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email;
+      
+      // Users can update only allowed fields in their own profile
+      // CANNOT change: role, verificationStatus, uid, email
+      allow update: if isAuthenticated() 
+        && isOwner(userId)
+        && cannotImpersonate(userId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.verificationStatus == resource.data.verificationStatus;
+      
+      // Only admins can delete user profiles
+      allow delete: if isAdmin();
+      
+      // Admins have full read/write access
+      allow read, write: if isAdmin();
     }
     
-    // Posts collection - public read, authenticated write
-    match /posts/{postId} {
-      // Public read access for posts
-      allow read: if true;
-      // Authenticated users can create posts
-      allow create: if request.auth != null;
-      // Users can update/delete their own posts
-      allow update, delete: if request.auth != null 
-        && request.auth.uid == resource.data.authorId;
-      // Admins can update/delete any post
-      allow update, delete: if isAdmin();
+    // ============================================
+    // ROLE-BASED SUBCOLLECTIONS
+    // ============================================
+    
+    // Patients subcollection - medical data protection
+    match /users/patients/{userId} {
+      // Patients can read/write only their own data
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      
+      // Doctors can read patient data only for assigned consultations
+      // This is checked at the consultation level, not here
+      // Admins have full access
+      allow read: if isAdmin();
+      
+      // No direct write access for doctors (must go through consultations)
+      allow create: if isAuthenticated() && isOwner(userId);
     }
     
-    // Reels collection - public read, authenticated write
-    match /reels/{reelId} {
-      allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null 
-        && request.auth.uid == resource.data.authorId;
-      allow update, delete: if isAdmin();
+    // Doctors subcollection
+    match /users/doctors/{userId} {
+      // Doctors can read/write their own profile
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      
+      // Patients can read doctor profiles (for booking consultations)
+      allow read: if isAuthenticated() && isPatient();
+      
+      // Admins have full access
+      allow read, write: if isAdmin();
+      
+      allow create: if isAuthenticated() && isOwner(userId);
     }
     
-    // Consultations collection - role-based access
-    match /consultations/{consultId} {
-      // Doctors can read consultations assigned to them
-      allow read: if request.auth != null 
-        && (isDoctor() && resource.data.doctorId == request.auth.uid
-        || isPatient() && resource.data.patientId == request.auth.uid
-        || isAdmin());
-      // Patients can create consultations
-      allow create: if request.auth != null && isPatient();
-      // Doctors can update consultations assigned to them
-      allow update: if request.auth != null 
-        && (isDoctor() && resource.data.doctorId == request.auth.uid
-        || isAdmin());
-      // No deletions (medical records must be preserved)
+    // Blood Donors subcollection
+    match /users/blood_donors/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Delivery Partners subcollection
+    match /users/delivery_partners/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Ambulance Drivers subcollection
+    match /users/ambulance_drivers/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Pharmacy Shops subcollection
+    match /users/pharmacy_shops/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Admins subcollection
+    match /users/admins/{userId} {
+      allow read, write: if isAdmin() && isOwner(userId);
+      allow create: if isAdmin();
+    }
+    
+    // ============================================
+    // MEDICAL DATA PROTECTION
+    // ============================================
+    
+    // Medical records collection - HIGHLY RESTRICTED
+    match /medicalRecords/{recordId} {
+      // Patients can read/write only their own medical records
+      allow read, write: if isAuthenticated() 
+        && isPatient() 
+        && resource.data.patientId == request.auth.uid;
+      
+      // Doctors can read medical records only for assigned consultations
+      allow read: if isAuthenticated() 
+        && isDoctor() 
+        && resource.data.doctorId == request.auth.uid;
+      
+      // No medical record is publicly readable
+      // Admins have full access for oversight
+      allow read, write: if isAdmin();
+      
+      // No deletions - medical records must be preserved
       allow delete: if false;
     }
     
-    // Orders collection - users can only access their own orders
+    // Prescriptions collection
+    match /prescriptions/{prescriptionId} {
+      // Patients can read their own prescriptions
+      allow read: if isAuthenticated() 
+        && isPatient() 
+        && resource.data.patientId == request.auth.uid;
+      
+      // Doctors can read/write prescriptions they created
+      allow read, write: if isAuthenticated() 
+        && isDoctor() 
+        && resource.data.doctorId == request.auth.uid;
+      
+      // No public access
+      allow read, write: if isAdmin();
+      
+      // No deletions
+      allow delete: if false;
+    }
+    
+    // ============================================
+    // POSTS COLLECTION
+    // ============================================
+    
+    match /posts/{postId} {
+      // All authenticated users can read public posts
+      // Role-restricted posts: only users with matching role can read
+      allow read: if isAuthenticated() 
+        && (
+          // Public posts - all authenticated users
+          resource.data.visibility == 'public'
+          // Role-restricted posts - only matching role
+          || (resource.data.visibility == 'role-restricted' 
+              && resource.data.ownerRole == getUserRole())
+          // Owner can always read their own posts
+          || resource.data.ownerId == request.auth.uid
+        );
+      
+      // Only authenticated users can create posts
+      // Medical advice posts: only verified doctors
+      allow create: if isAuthenticated()
+        && cannotImpersonate(request.resource.data.ownerId)
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerRole == getUserRole()
+        && (
+          // Non-medical content - any authenticated user
+          request.resource.data.contentType != 'medical_advice'
+          // Medical advice - only verified doctors
+          || (request.resource.data.contentType == 'medical_advice' && isVerifiedDoctor())
+        );
+      
+      // Only owner can update/delete their own posts
+      allow update: if isAuthenticated() 
+        && resource.data.ownerId == request.auth.uid
+        && cannotImpersonate(request.resource.data.ownerId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.ownerRole == resource.data.ownerRole;
+      
+      allow delete: if isAuthenticated() 
+        && resource.data.ownerId == request.auth.uid;
+      
+      // Admins can read/write/delete any post
+      allow read, write, delete: if isAdmin();
+    }
+    
+    // Post likes subcollection
+    match /posts/{postId}/likes/{likeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() 
+        && resource.data.userId == request.auth.uid;
+    }
+    
+    // Post comments subcollection
+    match /posts/{postId}/comments/{commentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() 
+        && resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // REELS COLLECTION
+    // ============================================
+    
+    match /reels/{reelId} {
+      // All authenticated users can read public reels
+      // Role-restricted reels: only users with matching role can read
+      allow read: if isAuthenticated() 
+        && (
+          resource.data.visibility == 'public'
+          || (resource.data.visibility == 'role-restricted' 
+              && resource.data.ownerRole == getUserRole())
+          || resource.data.ownerId == request.auth.uid
+        );
+      
+      // Only authenticated users can create reels
+      // Medical advice reels: only verified doctors
+      allow create: if isAuthenticated()
+        && cannotImpersonate(request.resource.data.ownerId)
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerRole == getUserRole()
+        && (
+          request.resource.data.contentType != 'medical_advice'
+          || (request.resource.data.contentType == 'medical_advice' && isVerifiedDoctor())
+        );
+      
+      // Only owner can update/delete their own reels
+      allow update: if isAuthenticated() 
+        && resource.data.ownerId == request.auth.uid
+        && cannotImpersonate(request.resource.data.ownerId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.ownerRole == resource.data.ownerRole;
+      
+      allow delete: if isAuthenticated() 
+        && resource.data.ownerId == request.auth.uid;
+      
+      // Admins can read/write/delete any reel
+      allow read, write, delete: if isAdmin();
+    }
+    
+    // Reel likes subcollection
+    match /reels/{reelId}/likes/{likeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() 
+        && resource.data.userId == request.auth.uid;
+    }
+    
+    // Reel comments subcollection
+    match /reels/{reelId}/comments/{commentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() 
+        && resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // CONSULTATIONS COLLECTION
+    // ============================================
+    
+    match /consultations/{consultId} {
+      // Doctors can read consultations assigned to them
+      // Patients can read their own consultations
+      allow read: if isAuthenticated() 
+        && (
+          (isDoctor() && resource.data.doctorId == request.auth.uid)
+          || (isPatient() && resource.data.patientId == request.auth.uid)
+          || isAdmin()
+        );
+      
+      // Patients can create consultations
+      allow create: if isAuthenticated() 
+        && isPatient()
+        && request.resource.data.patientId == request.auth.uid;
+      
+      // Doctors can update consultations assigned to them
+      allow update: if isAuthenticated() 
+        && (
+          (isDoctor() && resource.data.doctorId == request.auth.uid)
+          || isAdmin()
+        );
+      
+      // No deletions - medical records must be preserved
+      allow delete: if false;
+    }
+    
+    // ============================================
+    // CHAT SYSTEM (SECURE)
+    // ============================================
+    
+    match /chats/{chatId} {
+      // Only chat participants can read chat metadata
+      allow read: if isAuthenticated() 
+        && (
+          request.auth.uid in resource.data.participants
+          || isAdmin()
+        );
+      
+      // Only authenticated users can create chats
+      // Must be a participant in the chat being created
+      allow create: if isAuthenticated()
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants.size() >= 2
+        && request.resource.data.participants.size() <= 10; // Limit participants
+      
+      // Only participants can update chat (e.g., lastMessage, lastMessageTime)
+      // Cannot modify participants array (prevents adding unauthorized users)
+      allow update: if isAuthenticated() 
+        && request.auth.uid in resource.data.participants
+        && request.resource.data.participants == resource.data.participants; // Participants immutable
+      
+      // No deletions - chat history must be preserved
+      allow delete: if false;
+    }
+    
+    // Chat messages - IMMUTABLE AFTER SEND
+    match /chats/{chatId}/messages/{messageId} {
+      // Only chat participants can read messages
+      allow read: if isAuthenticated() 
+        && (
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+          || isAdmin()
+        );
+      
+      // Only chat participants can create messages
+      // Sender must match authenticated user (prevents impersonation)
+      allow create: if isAuthenticated() 
+        && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.createdAt == request.time; // Timestamp validation
+      
+      // Messages are IMMUTABLE after send (no edit/delete)
+      // This ensures chat integrity and prevents tampering
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ============================================
+    // ORDERS COLLECTION
+    // ============================================
+    
     match /orders/{orderId} {
       // Users can read their own orders
-      allow read: if request.auth != null 
-        && (resource.data.userId == request.auth.uid
-        || isAdmin());
+      // Delivery partners can read orders assigned to them
+      allow read: if isAuthenticated() 
+        && (
+          resource.data.userId == request.auth.uid
+          || (getUserRole() == 'medicine_delivery' && resource.data.deliveryPartnerId == request.auth.uid)
+          || isAdmin()
+        );
+      
       // Authenticated users can create orders
-      allow create: if request.auth != null;
+      allow create: if isAuthenticated() 
+        && request.resource.data.userId == request.auth.uid;
+      
       // Users can update their own orders
-      allow update: if request.auth != null 
-        && (resource.data.userId == request.auth.uid
-        || isAdmin());
+      // Delivery partners can update delivery status
+      allow update: if isAuthenticated() 
+        && (
+          resource.data.userId == request.auth.uid
+          || (getUserRole() == 'medicine_delivery' && resource.data.deliveryPartnerId == request.auth.uid)
+          || isAdmin()
+        );
     }
     
-    // Notifications collection - users can only read their own notifications
+    // ============================================
+    // NOTIFICATIONS COLLECTION
+    // ============================================
+    
     match /notifications/{notificationId} {
-      allow read: if request.auth != null 
-        && (resource.data.userId == request.auth.uid
-        || isAdmin());
-      allow create: if request.auth != null;
-      allow update: if request.auth != null 
+      // Users can only read their own notifications
+      allow read: if isAuthenticated() 
+        && (
+          resource.data.userId == request.auth.uid
+          || isAdmin()
+        );
+      
+      // System can create notifications
+      allow create: if isAuthenticated();
+      
+      // Users can update/delete their own notifications
+      allow update, delete: if isAuthenticated() 
         && resource.data.userId == request.auth.uid;
-      allow delete: if request.auth != null 
-        && resource.data.userId == request.auth.uid;
     }
     
-    // Medicines collection - public read, authenticated write
-    match /medicines/{medicineId} {
-      allow read: if true;
-      allow write: if request.auth != null && (isAdmin() || getUserRole() == 'medicine_delivery');
-    }
+    // ============================================
+    // ADMIN-ONLY COLLECTIONS
+    // ============================================
     
-    // Chats collection - users can only access chats they're part of
-    match /chats/{chatId} {
-      allow read: if request.auth != null 
-        && (request.auth.uid in resource.data.participants
-        || isAdmin());
-      allow create: if request.auth != null;
-      allow update: if request.auth != null 
-        && request.auth.uid in resource.data.participants;
-    }
-    
-    // Chat messages - users can only access messages in chats they're part of
-    match /chats/{chatId}/messages/{messageId} {
-      allow read: if request.auth != null 
-        && (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
-        || isAdmin());
-      allow create: if request.auth != null 
-        && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-      allow update, delete: if request.auth != null 
-        && request.auth.uid == resource.data.senderId;
-    }
-    
-    // Admin-only collections
     match /admin/{document=**} {
       allow read, write: if isAdmin();
     }
     
-    // Default deny all other collections
+    // ============================================
+    // DEFAULT DENY ALL
+    // ============================================
+    
+    // Default rule: deny all other collections
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
-

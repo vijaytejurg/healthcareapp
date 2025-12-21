@@ -29,9 +29,22 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // Navigation will be handled by auth state listener in App.js
+      console.log('🔐 Attempting login...');
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('✅ Login successful:', userCredential.user.uid);
+      
+      // Navigation will happen automatically via auth state listener in App.js
+      // But also try direct navigation as backup
+      setTimeout(() => {
+        try {
+          navigation.replace('MainTabs');
+          console.log('🏠 Navigated to MainTabs via navigation.replace');
+        } catch (navError) {
+          console.log('Navigation replace failed, relying on auth state listener');
+        }
+      }, 500);
     } catch (error) {
+      console.error('❌ Login error:', error);
       let errorMessage = 'Login failed. Please try again.';
       if (error.code === 'auth/user-not-found') {
         errorMessage = 'No account found with this email. Please sign up first.';
@@ -157,6 +170,15 @@ export default function LoginScreen({ navigation }) {
               <Text style={styles.signupLink}>Sign Up</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={styles.setupButton}
+            onPress={() => navigation.navigate('SetupUser')}
+            disabled={loading}
+          >
+            <Ionicons name="settings-outline" size={16} color="#666" />
+            <Text style={styles.setupButtonText}>Setup Default User</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -291,6 +313,18 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  setupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    padding: 10,
+  },
+  setupButtonText: {
+    color: '#666',
+    fontSize: 12,
+    marginLeft: 5,
   },
 });
 
