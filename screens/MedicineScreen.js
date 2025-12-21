@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
-import { db } from '../config/firebase';
+import { db } from '../src/firebase';
 import { collection, addDoc, updateDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
 import PaymentScreen from './PaymentScreen';
 import PrescriptionReader from './PrescriptionReader';

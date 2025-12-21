@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { db } from '../config/firebase';
+import { db } from '../src/firebase';
 import { collection, addDoc, updateDoc, doc, getDocs } from 'firebase/firestore';
 
 // Conditionally import MapView only on native platforms

@@ -1,11 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { View, ActivityIndicator, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './src/firebase';
 
 // Screens
+import LoginScreen from './screens/LoginScreen';
+import SignupScreen from './screens/SignupScreen';
 import HomeScreen from './screens/HomeScreen';
 import ExploreScreen from './screens/ExploreScreen';
 import ConsultScreen from './screens/ConsultScreen';
@@ -84,22 +90,79 @@ function MainTabs({ navigation }) {
 }
 
 export default function App() {
+  const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch user role from Firestore
+  const fetchUserRole = async (userId) => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        return userData.role || 'patient'; // Default to patient if role not found
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching user role:', error);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // User is signed in, fetch their role from Firestore
+        const role = await fetchUserRole(firebaseUser.uid);
+        setUser(firebaseUser);
+        setUserRole(role);
+      } else {
+        // User is signed out
+        setUser(null);
+        setUserRole(null);
+      }
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={{ marginTop: 10, color: '#666' }}>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer>
       <StatusBar style="auto" />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="MainTabs" component={MainTabs} />
-        <Stack.Screen name="Notifications" component={NotificationsScreen} />
-        <Stack.Screen name="Messages" component={MessagesScreen} />
-        <Stack.Screen name="Chat" component={ChatScreen} />
-        <Stack.Screen name="DoctorProfile" component={DoctorProfileScreen} />
-        <Stack.Screen name="UserProfile" component={UserProfileScreen} />
-        <Stack.Screen name="ConsultationChat" component={ConsultationChatScreen} />
-        <Stack.Screen name="MedicineOrder" component={MedicineOrderScreen} />
-        <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
-        <Stack.Screen name="HospitalBooking" component={HospitalBookingScreen} />
-        <Stack.Screen name="Ambulance" component={AmbulanceScreen} />
-        <Stack.Screen name="Articles" component={ArticlesScreen} />
+        {user && userRole ? (
+          // Authenticated users - show main app
+          <>
+            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
+            <Stack.Screen name="Messages" component={MessagesScreen} />
+            <Stack.Screen name="Chat" component={ChatScreen} />
+            <Stack.Screen name="DoctorProfile" component={DoctorProfileScreen} />
+            <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+            <Stack.Screen name="ConsultationChat" component={ConsultationChatScreen} />
+            <Stack.Screen name="MedicineOrder" component={MedicineOrderScreen} />
+            <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
+            <Stack.Screen name="HospitalBooking" component={HospitalBookingScreen} />
+            <Stack.Screen name="Ambulance" component={AmbulanceScreen} />
+            <Stack.Screen name="Articles" component={ArticlesScreen} />
+          </>
+        ) : (
+          // Unauthenticated users - show auth screens
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+          </>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );

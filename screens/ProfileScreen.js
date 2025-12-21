@@ -9,8 +9,11 @@ import {
   Image,
   Modal,
   TextInput,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { signOut } from 'firebase/auth';
+import { auth } from '../src/firebase';
 
 const ProfileScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('posts');
@@ -255,6 +258,32 @@ const ProfileScreen = ({ navigation }) => {
             <Ionicons name="calendar" size={18} color="#fff" />
             <Text style={styles.primaryButtonText}>Book Consultation</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={async () => {
+              Alert.alert(
+                'Logout',
+                'Are you sure you want to logout?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await signOut(auth);
+                      } catch (error) {
+                        Alert.alert('Error', error.message);
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#ff3b30" />
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
         </View>
       </View>
       <View style={styles.tabContainer}>
@@ -423,6 +452,7 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     marginTop: 10,
+    gap: 10,
   },
   primaryButton: {
     flexDirection: 'row',
@@ -434,6 +464,22 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ff3b30',
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  logoutButtonText: {
+    color: '#ff3b30',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
