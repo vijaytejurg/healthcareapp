@@ -1,4 +1,9 @@
-import React, { useState } from 'react';
+/**
+ * SignupScreen - User Registration
+ * Collects: Email, Password, Full Name, Role
+ */
+
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,60 +15,48 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { createUserAccount } from '../utils/userService';
-import { USER_ROLES } from '../utils/constants';
+import { signUp, getAuthErrorMessage } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigation } from '@react-navigation/native';
+
+// Available roles - matching requirements
+const USER_ROLES = [
+  { id: 'doctor', name: 'Doctor', icon: 'medical', color: '#007AFF' },
+  { id: 'patient', name: 'Patient', icon: 'person', color: '#34C759' },
+  { id: 'pharmacy', name: 'Pharmacy', icon: 'storefront', color: '#FF9500' },
+  { id: 'delivery', name: 'Delivery', icon: 'bicycle', color: '#AF52DE' },
+  { id: 'hospital', name: 'Hospital', icon: 'business', color: '#5856D6' },
+];
 
 export default function SignupScreen({ navigation }) {
-  const [step, setStep] = useState(1); // 1: Basic info, 2: Role selection, 3: Role-specific fields
-  const [loading, setLoading] = useState(false);
-
-  // Basic info
+  const { isAuthenticated } = useAuth();
+  
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-
-  // Role selection
   const [selectedRole, setSelectedRole] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  // Role-specific fields for signup
+  const [specialization, setSpecialization] = useState('');
+  const [licenseNumber, setLicenseNumber] = useState('');
+  const [hospitalName, setHospitalName] = useState('');
+  const [experience, setExperience] = useState('');
+  const [qualifications, setQualifications] = useState('');
 
-  // Role-specific fields
-  const [roleFields, setRoleFields] = useState({
-    // Doctor fields
-    specialization: '',
-    licenseNumber: '',
-    hospitalName: '',
-    
-    // Patient fields
-    age: '',
-    gender: '',
-    bloodGroup: '',
-    
-    // Blood Donor fields
-    availabilityStatus: 'available',
-    
-    // Delivery Partner fields
-    serviceArea: '',
-    
-    // Ambulance Driver fields
-    vehicleNumber: '',
-  });
+  // Navigate away when authenticated (App.js should handle this, but this is a backup)
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      console.log('✅ User authenticated in SignupScreen - App.js should navigate automatically');
+    }
+  }, [isAuthenticated, loading]);
 
-  // Handle role selection
-  const handleRoleSelect = (role) => {
-    setSelectedRole(role);
-    setStep(3);
-  };
-
-  // Handle role-specific field changes
-  const updateRoleField = (field, value) => {
-    setRoleFields(prev => ({ ...prev, [field]: value }));
-  };
-
-  // Validate basic info
-  const validateBasicInfo = () => {
+  const validateForm = () => {
     if (!fullName.trim()) {
       Alert.alert('Error', 'Please enter your full name');
       return false;
@@ -80,457 +73,133 @@ export default function SignupScreen({ navigation }) {
       Alert.alert('Error', 'Passwords do not match');
       return false;
     }
-    return true;
-  };
-
-  // Validate role-specific fields
-  const validateRoleFields = () => {
-    if (selectedRole === USER_ROLES.DOCTOR) {
-      if (!roleFields.specialization.trim()) {
-        Alert.alert('Error', 'Please enter your specialization');
+    if (!selectedRole) {
+      Alert.alert('Error', 'Please select a role');
+      return false;
+    }
+    
+    // Role-specific validations for doctors
+    if (selectedRole === 'doctor') {
+      if (!specialization.trim()) {
+        Alert.alert('Error', 'Please enter your medical specialization');
         return false;
       }
-      if (!roleFields.licenseNumber.trim()) {
-        Alert.alert('Error', 'Please enter your license number');
+      if (!licenseNumber.trim()) {
+        Alert.alert('Error', 'Please enter your medical license number (MCI/State Medical Council)');
         return false;
       }
-    } else if (selectedRole === USER_ROLES.PATIENT) {
-      if (!roleFields.age || parseInt(roleFields.age) < 1) {
-        Alert.alert('Error', 'Please enter a valid age');
-        return false;
-      }
-      if (!roleFields.gender) {
-        Alert.alert('Error', 'Please select your gender');
-        return false;
-      }
-    } else if (selectedRole === USER_ROLES.BLOOD_DONOR) {
-      if (!roleFields.bloodGroup) {
-        Alert.alert('Error', 'Please select your blood group');
-        return false;
-      }
-    } else if (selectedRole === USER_ROLES.MEDICINE_DELIVERY) {
-      if (!roleFields.serviceArea.trim()) {
-        Alert.alert('Error', 'Please enter your service area');
-        return false;
-      }
-    } else if (selectedRole === USER_ROLES.AMBULANCE_DRIVER) {
-      if (!roleFields.vehicleNumber.trim()) {
-        Alert.alert('Error', 'Please enter your vehicle number');
+      if (!hospitalName.trim()) {
+        Alert.alert('Error', 'Please enter your hospital/clinic name');
         return false;
       }
     }
+    
     return true;
   };
 
-  // Handle signup
   const handleSignup = async () => {
-    if (!validateRoleFields()) return;
+    if (!validateForm()) {
+      return;
+    }
 
     setLoading(true);
+    
+    // Show immediate feedback
+    console.log('🚀🚀🚀 SIGNUP STARTED - Watch this console!');
+    Alert.alert('Signing Up...', 'Creating your account. Please wait...');
+    
     try {
-      // Use the userService to create account with beautiful architecture
-      const userData = {
-        name: fullName.trim(),
+      console.log('📝 Form Data:', {
+        email: email,
+        name: fullName,
         role: selectedRole,
-        ...(selectedRole === USER_ROLES.DOCTOR && {
-          specialization: roleFields.specialization.trim(),
-          licenseNumber: roleFields.licenseNumber.trim(),
-          hospitalName: roleFields.hospitalName.trim(),
-        }),
-        ...(selectedRole === USER_ROLES.PATIENT && {
-          age: parseInt(roleFields.age),
-          gender: roleFields.gender,
-          bloodGroup: roleFields.bloodGroup,
-        }),
-        ...(selectedRole === USER_ROLES.BLOOD_DONOR && {
-          bloodGroup: roleFields.bloodGroup,
-          availabilityStatus: roleFields.availabilityStatus,
-        }),
-        ...(selectedRole === USER_ROLES.MEDICINE_DELIVERY && {
-          serviceArea: roleFields.serviceArea.trim(),
-        }),
-        ...(selectedRole === USER_ROLES.AMBULANCE_DRIVER && {
-          vehicleNumber: roleFields.vehicleNumber.trim(),
-          serviceArea: roleFields.serviceArea?.trim(),
-        }),
-        ...(selectedRole === USER_ROLES.PHARMACY_SHOP && {
-          shopName: roleFields.shopName.trim(),
-          licenseNumber: roleFields.licenseNumber.trim(),
-          serviceArea: roleFields.serviceArea?.trim(),
-        }),
-      };
-
-      await createUserAccount(email, password, userData);
+        passwordLength: password.length
+      });
       
-      // Account created successfully - navigation will happen automatically
-      // via auth state listener in App.js
-      // No need for alert, just let it navigate
-    } catch (error) {
-      let errorMessage = 'Sign up failed. Please try again.';
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'This email is already registered. Please login instead.';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak. Please use a stronger password.';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address. Please check and try again.';
+      console.log('⏳ Step 1: Creating Firebase Auth account...');
+      
+      // Prepare role-specific data
+      const roleSpecificData = {};
+      if (selectedRole === 'doctor') {
+        roleSpecificData.specialization = specialization.trim();
+        roleSpecificData.licenseNumber = licenseNumber.trim();
+        roleSpecificData.hospitalName = hospitalName.trim();
+        roleSpecificData.experience = experience.trim();
+        roleSpecificData.qualifications = qualifications.split(',').map(q => q.trim()).filter(q => q);
       }
-      Alert.alert('Sign Up Failed', errorMessage);
-    } finally {
+      
+      // Step 1: Create Firebase Auth account and Firestore document
+      const result = await signUp(email, password, fullName, selectedRole, roleSpecificData);
+      
+      // SUCCESS - Show clear feedback
+      console.log('✅✅✅ ACCOUNT CREATED SUCCESSFULLY!');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('   👤 User ID:', result.user.uid);
+      console.log('   📧 Email:', result.userData.email);
+      console.log('   👨‍⚕️ Role:', result.userData.role);
+      console.log('   ✅ Data saved to Firebase Firestore');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
+      // Show success alert with UID
+      Alert.alert(
+        '✅ Account Created!', 
+        `Your account has been created successfully!\n\nUser ID: ${result.user.uid}\nEmail: ${result.userData.email}\nRole: ${result.userData.role}\n\nRedirecting to home...`,
+        [{ text: 'OK' }]
+      );
+      
+      // Wait for Firestore to sync and AuthContext to update
+      console.log('⏳ Step 2: Waiting for authentication state to update...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Check if user is now authenticated
+      console.log('⏳ Step 3: Checking authentication status...');
+      const { auth } = require('../src/firebase');
+      
+      if (auth.currentUser) {
+        console.log('✅ User is authenticated!');
+        console.log('🔄 Reloading page to navigate to home...');
+        
+        // Force page reload to trigger auth check and navigation
+        if (typeof window !== 'undefined') {
+          // For web - reload the page
+          window.location.reload();
+        } else {
+          // For native - show success
+          Alert.alert(
+            'Success!', 
+            'Account created successfully!',
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        console.error('❌ User not authenticated after signup');
+        Alert.alert(
+          'Warning', 
+          `Account created but authentication check failed.\n\nYour User ID: ${result.user.uid}\n\nPlease try logging in with your email and password.`,
+          [{ text: 'OK' }]
+        );
+        setLoading(false);
+      }
+      
+    } catch (error) {
+      // ERROR - Show detailed error
+      console.error('❌❌❌ SIGNUP ERROR OCCURRED!');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('Error Code:', error.code);
+      console.error('Error Message:', error.message);
+      console.error('Full Error:', error);
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
+      const errorMessage = getAuthErrorMessage(error);
+      
+      Alert.alert(
+        '❌ Sign Up Failed', 
+        `${errorMessage}\n\nError Code: ${error.code || 'Unknown'}\n\nPlease check the browser console (F12) for more details.`,
+        [{ text: 'OK' }]
+      );
+      
       setLoading(false);
     }
-  };
-
-  // Render role selection screen
-  const renderRoleSelection = () => {
-    const roles = [
-      { id: USER_ROLES.DOCTOR, name: 'Doctor', icon: 'medical', color: '#007AFF', description: 'Provide consultations' },
-      { id: USER_ROLES.PATIENT, name: 'Patient', icon: 'person', color: '#34C759', description: 'Book appointments' },
-      { id: USER_ROLES.PHARMACY_SHOP, name: 'Pharmacy Shop', icon: 'storefront', color: '#FF9500', description: 'Manage pharmacy' },
-      { id: USER_ROLES.AMBULANCE_DRIVER, name: 'Ambulance Driver', icon: 'car', color: '#5856D6', description: 'Emergency services' },
-      { id: USER_ROLES.BLOOD_DONOR, name: 'Blood Donor', icon: 'water', color: '#FF3B30', description: 'Help save lives' },
-      { id: USER_ROLES.MEDICINE_DELIVERY, name: 'Delivery Partner', icon: 'bicycle', color: '#AF52DE', description: 'Deliver medicines' },
-    ];
-
-    return (
-      <View style={styles.roleContainer}>
-        <Text style={styles.sectionTitle}>Select Your Role</Text>
-        <Text style={styles.sectionSubtitle}>Choose how you want to use MediDoc</Text>
-        
-        <ScrollView showsVerticalScrollIndicator={false} style={styles.rolesList}>
-          {roles.map((role) => (
-            <TouchableOpacity
-              key={role.id}
-              style={[
-                styles.roleCard,
-                selectedRole === role.id && styles.roleCardSelected,
-              ]}
-              onPress={() => handleRoleSelect(role.id)}
-            >
-              <View style={[styles.roleIconContainer, { backgroundColor: role.color + '20' }]}>
-                <Ionicons name={role.icon} size={32} color={role.color} />
-              </View>
-              <View style={styles.roleInfo}>
-                <Text style={styles.roleName}>{role.name}</Text>
-                <Text style={styles.roleDescription}>{role.description}</Text>
-              </View>
-              {selectedRole === role.id && (
-                <Ionicons name="checkmark-circle" size={24} color={role.color} />
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        <TouchableOpacity
-          style={[styles.button, !selectedRole && styles.buttonDisabled]}
-          onPress={() => selectedRole && setStep(3)}
-          disabled={!selectedRole}
-        >
-          <Text style={styles.buttonText}>Continue</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  // Render role-specific fields
-  const renderRoleFields = () => {
-    return (
-      <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Additional Information</Text>
-        <Text style={styles.sectionSubtitle}>Please provide the following details</Text>
-
-        {selectedRole === USER_ROLES.DOCTOR && (
-          <>
-            <View style={styles.inputContainer}>
-              <Ionicons name="medical-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Specialization (e.g., Cardiology, Pediatrics)"
-                placeholderTextColor="#999"
-                value={roleFields.specialization}
-                onChangeText={(value) => updateRoleField('specialization', value)}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="document-text-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="License Number"
-                placeholderTextColor="#999"
-                value={roleFields.licenseNumber}
-                onChangeText={(value) => updateRoleField('licenseNumber', value)}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="business-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Hospital/Clinic Name"
-                placeholderTextColor="#999"
-                value={roleFields.hospitalName}
-                onChangeText={(value) => updateRoleField('hospitalName', value)}
-              />
-            </View>
-          </>
-        )}
-
-        {selectedRole === USER_ROLES.PATIENT && (
-          <>
-            <View style={styles.inputContainer}>
-              <Ionicons name="calendar-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Age"
-                placeholderTextColor="#999"
-                value={roleFields.age}
-                onChangeText={(value) => updateRoleField('age', value)}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Gender (Male/Female/Other)"
-                placeholderTextColor="#999"
-                value={roleFields.gender}
-                onChangeText={(value) => updateRoleField('gender', value)}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="water-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Blood Group (e.g., A+, B-, O+)"
-                placeholderTextColor="#999"
-                value={roleFields.bloodGroup}
-                onChangeText={(value) => updateRoleField('bloodGroup', value)}
-              />
-            </View>
-          </>
-        )}
-
-        {selectedRole === USER_ROLES.BLOOD_DONOR && (
-          <>
-            <View style={styles.inputContainer}>
-              <Ionicons name="water-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Blood Group (e.g., A+, B-, O+)"
-                placeholderTextColor="#999"
-                value={roleFields.bloodGroup}
-                onChangeText={(value) => updateRoleField('bloodGroup', value)}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#666" style={styles.inputIcon} />
-              <Text style={styles.label}>Availability Status</Text>
-              <View style={styles.radioContainer}>
-                <TouchableOpacity
-                  style={styles.radioOption}
-                  onPress={() => updateRoleField('availabilityStatus', 'available')}
-                >
-                  <View style={[
-                    styles.radio,
-                    roleFields.availabilityStatus === 'available' && styles.radioSelected
-                  ]} />
-                  <Text style={styles.radioText}>Available</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.radioOption}
-                  onPress={() => updateRoleField('availabilityStatus', 'unavailable')}
-                >
-                  <View style={[
-                    styles.radio,
-                    roleFields.availabilityStatus === 'unavailable' && styles.radioSelected
-                  ]} />
-                  <Text style={styles.radioText}>Unavailable</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </>
-        )}
-
-        {selectedRole === USER_ROLES.MEDICINE_DELIVERY && (
-          <View style={styles.inputContainer}>
-            <Ionicons name="location-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Service Area (e.g., Downtown, North Zone)"
-              placeholderTextColor="#999"
-              value={roleFields.serviceArea}
-              onChangeText={(value) => updateRoleField('serviceArea', value)}
-            />
-          </View>
-        )}
-
-        {selectedRole === USER_ROLES.AMBULANCE_DRIVER && (
-          <>
-            <View style={styles.inputContainer}>
-              <Ionicons name="car-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Vehicle Number"
-                placeholderTextColor="#999"
-                value={roleFields.vehicleNumber}
-                onChangeText={(value) => updateRoleField('vehicleNumber', value)}
-              />
-            </View>
-            <View style={styles.inputContainer}>
-              <Ionicons name="location-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Service Area (e.g., Downtown, North Zone)"
-                placeholderTextColor="#999"
-                value={roleFields.serviceArea}
-                onChangeText={(value) => updateRoleField('serviceArea', value)}
-              />
-            </View>
-          </>
-        )}
-
-        {selectedRole === USER_ROLES.PHARMACY_SHOP && (
-          <>
-            <View style={styles.inputContainer}>
-              <Ionicons name="storefront-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Shop Name"
-                placeholderTextColor="#999"
-                value={roleFields.shopName}
-                onChangeText={(value) => updateRoleField('shopName', value)}
-              />
-            </View>
-            <View style={styles.inputContainer}>
-              <Ionicons name="document-text-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="License Number"
-                placeholderTextColor="#999"
-                value={roleFields.licenseNumber}
-                onChangeText={(value) => updateRoleField('licenseNumber', value)}
-              />
-            </View>
-            <View style={styles.inputContainer}>
-              <Ionicons name="location-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Service Area / Location"
-                placeholderTextColor="#999"
-                value={roleFields.serviceArea}
-                onChangeText={(value) => updateRoleField('serviceArea', value)}
-              />
-            </View>
-          </>
-        )}
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={[styles.button, styles.buttonSecondary]}
-            onPress={() => setStep(2)}
-            disabled={loading}
-          >
-            <Text style={styles.buttonSecondaryText}>Back</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.buttonPrimary, loading && styles.buttonDisabled]}
-            onPress={handleSignup}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Create Account</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    );
-  };
-
-  // Render basic info screen
-  const renderBasicInfo = () => {
-    return (
-      <View style={styles.form}>
-        <View style={styles.inputContainer}>
-          <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Full Name"
-            placeholderTextColor="#999"
-            value={fullName}
-            onChangeText={setFullName}
-            autoCapitalize="words"
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#999"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Password (min. 6 characters)"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoComplete="password"
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm Password"
-            placeholderTextColor="#999"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-            autoCapitalize="none"
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.button, styles.buttonPrimary, (!fullName || !email || !password || !confirmPassword) && styles.buttonDisabled]}
-          onPress={() => {
-            if (validateBasicInfo()) {
-              setStep(2);
-            }
-          }}
-          disabled={!fullName || !email || !password || !confirmPassword}
-        >
-          <Text style={styles.buttonText}>Continue</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.switchButton}
-          onPress={() => navigation.navigate('Login')}
-        >
-          <Text style={styles.switchText}>
-            Already have an account? <Text style={styles.switchTextBold}>Login</Text>
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
   };
 
   return (
@@ -538,7 +207,7 @@ export default function SignupScreen({ navigation }) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -546,17 +215,269 @@ export default function SignupScreen({ navigation }) {
           <View style={styles.logoContainer}>
             <Ionicons name="medical" size={60} color="#007AFF" />
           </View>
-          <Text style={styles.title}>MediDoc</Text>
-          <Text style={styles.subtitle}>
-            {step === 1 && 'Create your account'}
-            {step === 2 && 'Choose your role'}
-            {step === 3 && 'Complete your profile'}
-          </Text>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join MediDoc today</Text>
         </View>
 
-        {step === 1 && renderBasicInfo()}
-        {step === 2 && renderRoleSelection()}
-        {step === 3 && renderRoleFields()}
+        <View style={styles.form}>
+          {/* Full Name */}
+          <View style={styles.inputContainer}>
+            <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Full Name"
+              placeholderTextColor="#999"
+              value={fullName}
+              onChangeText={setFullName}
+              autoCapitalize="words"
+              autoComplete="name"
+              editable={!loading}
+            />
+          </View>
+
+          {/* Email */}
+          <View style={styles.inputContainer}>
+            <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#999"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              editable={!loading}
+            />
+          </View>
+
+          {/* Password */}
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#999"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoComplete="new-password"
+              editable={!loading}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.eyeIcon}
+            >
+              <Ionicons
+                name={showPassword ? "eye-outline" : "eye-off-outline"}
+                size={20}
+                color="#666"
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Confirm Password */}
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm Password"
+              placeholderTextColor="#999"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showConfirmPassword}
+              autoCapitalize="none"
+              autoComplete="new-password"
+              editable={!loading}
+            />
+            <TouchableOpacity
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              style={styles.eyeIcon}
+            >
+              <Ionicons
+                name={showConfirmPassword ? "eye-outline" : "eye-off-outline"}
+                size={20}
+                color="#666"
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Role Selection */}
+          <View style={styles.roleSection}>
+            <Text style={styles.roleLabel}>Select Your Role</Text>
+            <View style={styles.roleGrid}>
+              {USER_ROLES.map((role) => (
+                <TouchableOpacity
+                  key={role.id}
+                  style={[
+                    styles.roleCard,
+                    selectedRole === role.id && styles.roleCardSelected,
+                  ]}
+                  onPress={() => setSelectedRole(role.id)}
+                  disabled={loading}
+                >
+                  <View style={[styles.roleIconContainer, { backgroundColor: role.color + '20' }]}>
+                    <Ionicons name={role.icon} size={24} color={role.color} />
+                  </View>
+                  <Text style={styles.roleName}>{role.name}</Text>
+                  {selectedRole === role.id && (
+                    <Ionicons name="checkmark-circle" size={20} color={role.color} style={styles.checkIcon} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Role-Specific Fields - Doctor */}
+          {selectedRole === 'doctor' && (
+            <View style={styles.roleSpecificSection}>
+              <Text style={styles.roleSpecificTitle}>Medical Information (India)</Text>
+              
+              <View style={styles.inputContainer}>
+                <Ionicons name="medical-outline" size={20} color="#666" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Medical Specialization (e.g., Cardiology, General Medicine)"
+                  placeholderTextColor="#999"
+                  value={specialization}
+                  onChangeText={setSpecialization}
+                  editable={!loading}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="document-text-outline" size={20} color="#666" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Medical License Number (MCI/State Medical Council)"
+                  placeholderTextColor="#999"
+                  value={licenseNumber}
+                  onChangeText={setLicenseNumber}
+                  editable={!loading}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="business-outline" size={20} color="#666" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Hospital/Clinic Name"
+                  placeholderTextColor="#999"
+                  value={hospitalName}
+                  onChangeText={setHospitalName}
+                  editable={!loading}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="calendar-outline" size={20} color="#666" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Years of Experience"
+                  placeholderTextColor="#999"
+                  value={experience}
+                  onChangeText={setExperience}
+                  keyboardType="numeric"
+                  editable={!loading}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Ionicons name="school-outline" size={20} color="#666" style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.input, { minHeight: 60, textAlignVertical: 'top', paddingTop: 12 }]}
+                  placeholder="Qualifications (comma-separated, e.g., MBBS, MD)"
+                  placeholderTextColor="#999"
+                  value={qualifications}
+                  onChangeText={setQualifications}
+                  multiline
+                  numberOfLines={2}
+                  editable={!loading}
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Sign Up Button - Always clickable for debugging */}
+          <TouchableOpacity
+            style={[
+              styles.button, 
+              styles.signupButton, 
+              (!fullName || !email || !password || !selectedRole || loading) && styles.buttonDisabled
+            ]}
+            onPress={() => {
+              console.log('🔘🔘🔘 CREATE ACCOUNT BUTTON CLICKED!');
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              
+              // Validate before proceeding
+              if (!fullName || !email || !password || !selectedRole) {
+                console.log('❌ Validation failed - missing fields');
+                Alert.alert('Error', 'Please fill in all fields and select a role');
+                return;
+              }
+              
+              if (loading) {
+                console.log('⏳ Signup already in progress...');
+                return;
+              }
+              
+              console.log('✅ All validations passed!');
+              console.log('🚀 Calling handleSignup() function...');
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              handleSignup();
+            }}
+            disabled={loading || !fullName || !email || !password || !selectedRole}
+            activeOpacity={0.7}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>
+                Create Account
+                {(!fullName || !email || !password || !selectedRole) && ' (Fill All Fields)'}
+              </Text>
+            )}
+          </TouchableOpacity>
+          
+          {/* Debug panel - shows button state */}
+          <View style={{ marginTop: 10, padding: 10, backgroundColor: '#f0f0f0', borderRadius: 5 }}>
+            <Text style={{ fontSize: 11, color: '#666', marginBottom: 5 }}>
+              Debug Info:
+            </Text>
+            <Text style={{ fontSize: 10, color: '#666' }}>
+              Name: {fullName ? '✓' : '✗'} | Email: {email ? '✓' : '✗'} | Pass: {password ? '✓' : '✗'} | Role: {selectedRole || '✗'}
+            </Text>
+            <Text style={{ fontSize: 10, color: '#666', marginTop: 3 }}>
+              Button Enabled: {(!loading && fullName && email && password && selectedRole) ? 'YES ✅' : 'NO ❌'}
+            </Text>
+            <Text style={{ fontSize: 10, color: '#666', marginTop: 3 }}>
+              Loading: {loading ? 'YES' : 'NO'}
+            </Text>
+          </View>
+          
+          {/* Test button to verify clicks work */}
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#34C759', marginTop: 10 }]}
+            onPress={() => {
+              console.log('🧪 TEST BUTTON CLICKED - If you see this, clicks work!');
+              Alert.alert('Test', 'Button clicks are working! Check console for logs.');
+            }}
+          >
+            <Text style={styles.buttonText}>🧪 Test Button (Click Me)</Text>
+          </TouchableOpacity>
+
+          {/* Login Link */}
+          <View style={styles.loginContainer}>
+            <Text style={styles.loginText}>Already have an account? </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Login')}
+              disabled={loading}
+            >
+              <Text style={styles.loginLink}>Log In</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -574,7 +495,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 40,
   },
   logoContainer: {
     width: 100,
@@ -617,6 +538,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
   },
+  eyeIcon: {
+    padding: 5,
+  },
+  roleSection: {
+    marginBottom: 20,
+  },
+  roleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 15,
+  },
+  roleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  roleCard: {
+    width: '48%',
+    backgroundColor: '#f8f8f8',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+  },
+  roleCardSelected: {
+    borderColor: '#007AFF',
+    backgroundColor: '#007AFF10',
+  },
+  roleIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  roleName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#000',
+    textAlign: 'center',
+  },
+  checkIcon: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+  },
+  roleSpecificSection: {
+    marginTop: 20,
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: '#f8f8f8',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF20',
+  },
+  roleSpecificTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#007AFF',
+    marginBottom: 15,
+  },
   button: {
     borderRadius: 12,
     height: 50,
@@ -624,13 +610,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  buttonPrimary: {
+  signupButton: {
     backgroundColor: '#007AFF',
-  },
-  buttonSecondary: {
-    backgroundColor: '#f0f0f0',
-    flex: 1,
-    marginRight: 10,
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -640,108 +621,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  buttonSecondaryText: {
-    color: '#000',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  buttonRow: {
+  loginContainer: {
     flexDirection: 'row',
-    marginTop: 20,
-  },
-  switchButton: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  switchText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  switchTextBold: {
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  roleContainer: {
-    width: '100%',
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 5,
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
-  },
-  rolesList: {
-    maxHeight: 400,
-  },
-  roleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f8f8',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  roleCardSelected: {
-    borderColor: '#007AFF',
-    backgroundColor: '#007AFF10',
-  },
-  roleIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
+    marginTop: 20,
   },
-  roleInfo: {
-    flex: 1,
+  loginText: {
+    color: '#666',
+    fontSize: 14,
   },
-  roleName: {
-    fontSize: 18,
+  loginLink: {
+    color: '#007AFF',
+    fontSize: 14,
     fontWeight: '600',
-    color: '#000',
-    marginBottom: 3,
-  },
-  roleDescription: {
-    fontSize: 14,
-    color: '#666',
-  },
-  label: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 10,
-  },
-  radioContainer: {
-    flexDirection: 'row',
-    marginTop: 10,
-  },
-  radioOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 20,
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#666',
-    marginRight: 8,
-  },
-  radioSelected: {
-    borderColor: '#007AFF',
-    backgroundColor: '#007AFF',
-  },
-  radioText: {
-    fontSize: 16,
-    color: '#000',
   },
 });
-

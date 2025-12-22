@@ -12,8 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../src/firebase';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { signIn, getAuthErrorMessage } from '../services/authService';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -29,32 +28,16 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      console.log('🔐 Attempting login...');
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('✅ Login successful:', userCredential.user.uid);
+      console.log('🔐 Attempting login with email:', email);
       
-      // Navigation will happen automatically via auth state listener in App.js
-      // But also try direct navigation as backup
-      setTimeout(() => {
-        try {
-          navigation.replace('MainTabs');
-          console.log('🏠 Navigated to MainTabs via navigation.replace');
-        } catch (navError) {
-          console.log('Navigation replace failed, relying on auth state listener');
-        }
-      }, 500);
+      // Sign in using auth service
+      await signIn(email, password);
+      
+      // Navigation will happen automatically via AuthContext in App.js
+      console.log('✅ Login successful! Redirecting...');
     } catch (error) {
       console.error('❌ Login error:', error);
-      let errorMessage = 'Login failed. Please try again.';
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = 'No account found with this email. Please sign up first.';
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Incorrect password. Please try again.';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address. Please check and try again.';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed attempts. Please try again later.';
-      }
+      const errorMessage = getAuthErrorMessage(error);
       Alert.alert('Login Failed', errorMessage);
     } finally {
       setLoading(false);
@@ -171,14 +154,6 @@ export default function LoginScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={styles.setupButton}
-            onPress={() => navigation.navigate('SetupUser')}
-            disabled={loading}
-          >
-            <Ionicons name="settings-outline" size={16} color="#666" />
-            <Text style={styles.setupButtonText}>Setup Default User</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

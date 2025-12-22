@@ -14,13 +14,13 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useUser } from '../contexts/UserContext';
+import { useAuth } from '../contexts/AuthContext';
 import { subscribeToPlatformStats, getPlatformStats } from '../services/adminService';
 
 const { width } = Dimensions.get('window');
 
 const AdminDashboardScreen = ({ navigation }) => {
-  const { userData } = useUser();
+  const { userData } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [platformStats, setPlatformStats] = useState({
     totalUsers: 0,

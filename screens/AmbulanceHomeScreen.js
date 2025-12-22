@@ -15,7 +15,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useUser } from '../contexts/UserContext';
+import { useAuth } from '../contexts/AuthContext';
 import {
   subscribeToEmergencyRequests,
   getAmbulanceTodayStats,
@@ -25,7 +25,7 @@ import {
 const { width } = Dimensions.get('window');
 
 const AmbulanceHomeScreen = ({ navigation }) => {
-  const { user, userData } = useUser();
+  const { user, userData } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [todayStats, setTodayStats] = useState({
     trips: 0,

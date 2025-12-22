@@ -1,0 +1,70 @@
+IMPLEMENT WORKING LOGIN/CREDENTIALS SYSTEM FOR HEALTHCARE APP
+
+CONTEXT:
+- React Native Expo app currently opens directly to Home (no auth)
+- Firebase Auth + Firestore already configured
+- Need to add login/signup that actually works
+
+REQUIREMENTS:
+
+1. AUTH FLOW:
+   - App checks Firebase Auth state on launch
+   - If NOT logged in → Show Login screen
+   - If logged in → Show Home screen
+   - Must persist on refresh/reopen
+
+2. LOGIN SCREEN (screens/LoginScreen.js):
+   - Email + Password fields
+   - Use signInWithEmailAndPassword(auth, email, password)
+   - On success → Navigate to Home
+   - Show errors for wrong credentials
+
+3. SIGNUP SCREEN (screens/SignupScreen.js):
+   - Fields: Name, Email, Password, Confirm Password, Role
+   - Roles: doctor, patient, pharmacy, delivery_partner, hospital_clinic
+   - Create Firebase Auth user
+   - Create Firestore document at users/{uid} with: uid, email, name, role, createdAt
+   - On success → Navigate to Home
+
+4. AUTH CONTEXT (contexts/AuthContext.js):
+   - Listen to onAuthStateChanged
+   - Listen to Firestore users/{uid} document (real-time)
+   - Provide: user, userData, loading, isAuthenticated, role, signOut
+
+5. APP.JS:
+   - Wrap with AuthProvider
+   - Show loading while checking auth
+   - If !isAuthenticated → Login screen
+   - If isAuthenticated → MainTabs (Home)
+
+6. PROFILE SCREEN:
+   - Show user data from AuthContext
+   - Add logout button
+   - Logout → signOut() → Redirect to Login
+
+7. ERROR HANDLING:
+   - User-friendly error messages
+   - Handle: wrong password, user not found, email exists, etc.
+
+MUST WORK:
+✅ Login with email/password
+✅ Signup with role selection
+✅ Persistent login (stays logged in)
+✅ Auto-redirect based on auth state
+✅ Logout functionality
+✅ Real-time user data
+
+DON'T BREAK:
+- Existing Home/Explore/Consult/Medicine/Donor/Profile screens
+- Current navigation structure
+
+FILES TO CREATE/UPDATE:
+- contexts/AuthContext.js
+- services/authService.js
+- screens/LoginScreen.js
+- screens/SignupScreen.js
+- screens/ProfileScreen.js
+- App.js
+
+Make it production-ready with proper error handling and loading states.
+

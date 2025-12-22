@@ -1,3 +1,12 @@
+# 🔥 Firestore Rules - Ready to Deploy
+
+## Copy This Code to Firebase Console
+
+Go to: https://console.firebase.google.com/ → Select project `healthcare-287c1` → Firestore Database → Rules tab
+
+Then copy and paste the code below:
+
+```javascript
 rules_version = '2';
 
 service cloud.firestore {
@@ -38,9 +47,17 @@ service cloud.firestore {
 
     /* ---------------- USERS (PROFILES) ---------------- */
     match /users/{userId} {
-      allow create: if isSignedIn();
-      allow read: if isSignedIn();
-      allow update, delete: if isSignedIn() && isOwner(userId);
+      // Users can create their own profile during signup
+      allow create: if isSignedIn() && isOwner(userId);
+      
+      // Users can read their own profile
+      allow read: if isSignedIn() && isOwner(userId);
+      
+      // Users can update their own profile
+      allow update: if isSignedIn() && isOwner(userId);
+      
+      // Users can delete their own profile
+      allow delete: if isSignedIn() && isOwner(userId);
     }
 
     /* ---------------- POSTS & REELS ---------------- */
@@ -89,3 +106,46 @@ service cloud.firestore {
     }
   }
 }
+```
+
+## 📋 Step-by-Step Deployment
+
+### Method 1: Firebase Console (Easiest)
+
+1. **Go to:** https://console.firebase.google.com/
+2. **Select project:** `healthcare-287c1`
+3. **Click:** Firestore Database (left menu)
+4. **Click:** Rules tab
+5. **Select all** existing text (Ctrl+A)
+6. **Delete** it
+7. **Paste** the code above
+8. **Click:** Publish button
+9. **Wait for:** "Rules published successfully" ✅
+
+### Method 2: Firebase CLI
+
+```bash
+cd C:\Users\vijay\Desktop\MediDoc\healthcareapp
+firebase login
+firebase deploy --only firestore:rules
+```
+
+## ✅ What These Rules Do
+
+- ✅ **Users can create their own profile** at `users/{uid}` during signup
+- ✅ **Users can only read/update their own data** (security)
+- ✅ **Public posts/reels** can be read by anyone
+- ✅ **Role-based access** for consultations, medicines, deliveries, hospitals
+- ✅ **Default deny** - blocks all other collections
+
+## 🔒 Security Features
+
+- Document ID MUST equal Firebase Auth UID (prevents impersonation)
+- Users can only modify their own documents
+- Role-based permissions for specialized collections
+- No public access to user profiles
+
+## ⚠️ Important
+
+After deploying, **refresh your browser** and try signup again. The rules will allow users to create their profile documents.
+

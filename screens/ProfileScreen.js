@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,167 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { signOut } from 'firebase/auth';
-import { auth } from '../src/firebase';
+import { useRoute, useFocusEffect } from '@react-navigation/native';
+import { useAuth } from '../contexts/AuthContext';
+import { navigationRef } from '../utils/navigationRef';
 
 const ProfileScreen = ({ navigation }) => {
+  const { userData, userName, userEmail, role, signOut, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState('posts');
   const [showEditModal, setShowEditModal] = useState(false);
+  
+  const route = useRoute();
+  
+  // IMMEDIATE synchronous check - computed on EVERY render (not memoized)
+  // This ensures it's always accurate regardless of timing or navigation changes
+  const isInsideMainTabs = (() => {
+    try {
+      const parent = navigation.getParent();
+      if (!parent) {
+        return false;
+      }
+      
+      const parentState = parent.getState();
+      if (!parentState || !parentState.routes || parentState.routes.length === 0) {
+        return false;
+      }
+      
+      const routeNames = parentState.routes.map(r => r.name);
+      
+      // MainTabs MUST have ALL these 6 routes - this is the definitive check
+      const requiredRoutes = ['Home', 'Explore', 'Profile', 'Consult', 'Medicine', 'Donor'];
+      const hasAllRoutes = requiredRoutes.every(routeName => routeNames.includes(routeName));
+      
+      return hasAllRoutes;
+    } catch (e) {
+      return false;
+    }
+  })();
+  
+  // Handle logout - SIMPLIFIED DIRECT LOGOUT
+  const handleLogout = async () => {
+    console.log('🚪🚪🚪 LOGOUT BUTTON CLICKED - Starting logout NOW');
+    
+    // Show confirmation but proceed immediately
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => console.log('❌ Logout cancelled by user')
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: () => {
+            console.log('✅ User confirmed logout - executing immediately...');
+            executeLogout();
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // Direct logout execution - WAIT for Firebase signOut to complete
+  const executeLogout = async () => {
+    console.log('🔄🔄🔄 EXECUTING LOGOUT - STARTING NOW');
+    console.log('Current URL:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+    
+    try {
+      // For web: Sign out FIRST, then reload
+      if (typeof window !== 'undefined') {
+        console.log('🌐 Web platform detected');
+        
+        // CRITICAL: Sign out from Firebase FIRST and WAIT for it
+        console.log('Step 1: Signing out from Firebase Auth (WAITING for completion)...');
+        try {
+          await signOut();
+          console.log('✅ Step 1: Firebase signOut COMPLETED successfully');
+        } catch (signOutError) {
+          console.error('❌ Step 1: Firebase signOut FAILED:', signOutError);
+          console.log('⚠️ Continuing anyway...');
+        }
+        
+        // Step 2: Clear all storage
+        console.log('Step 2: Clearing ALL browser storage...');
+        try {
+          // Clear Firebase-specific items
+          const keysToRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.includes('firebase') || key.includes('auth') || key.includes('user'))) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key));
+          
+          localStorage.clear();
+          sessionStorage.clear();
+          console.log('✅ Step 2: All storage cleared');
+        } catch (storageError) {
+          console.warn('⚠️ Step 2: Storage clear warning:', storageError);
+        }
+        
+        // Step 3: Wait a moment to ensure everything is cleared
+        console.log('Step 3: Waiting 200ms for state to clear...');
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Step 4: FORCE RELOAD - this is critical
+        console.log('Step 4: FORCING PAGE RELOAD NOW...');
+        console.log('🔄 Using window.location.href = "/"');
+        
+        // Use the most reliable method
+        window.location.href = window.location.origin + '/';
+        
+        // Backup: if that doesn't work, reload after 500ms
+        setTimeout(() => {
+          console.log('🔄 Backup: window.location.reload()');
+          window.location.reload();
+        }, 500);
+        
+      } else {
+        // Native: Sign out and navigate
+        console.log('📱 Native platform detected');
+        
+        try {
+          await signOut();
+          console.log('✅ SignOut successful');
+          
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          if (navigationRef?.isReady()) {
+            navigationRef.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          } else {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          }
+        } catch (error) {
+          console.error('Logout error:', error);
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          });
+        }
+      }
+    } catch (error) {
+      console.error('❌ CRITICAL LOGOUT ERROR:', error);
+      console.error('Error stack:', error.stack);
+      
+      // Last resort: force reload
+      if (typeof window !== 'undefined') {
+        console.log('🔄 Last resort: window.location.reload()');
+        window.location.reload();
+      }
+    }
+  };
   
   // Mock saved collections data - In real app, this would come from shared state/context
   const savedCollections = [
@@ -58,18 +213,21 @@ const ProfileScreen = ({ navigation }) => {
     },
   ];
 
+  // Get user data from AuthContext
   const user = {
-    name: 'Your Name',
-    username: '@username',
+    name: userName || 'User',
+    username: `@${userEmail?.split('@')[0] || 'user'}`,
+    email: userEmail || '',
+    role: role || 'patient',
     avatar: '👤',
-    bio: 'Healthcare enthusiast | Doctor | Helping people live healthier lives',
-    posts: 156,
-    followers: 1234,
-    following: 567,
-    verified: true,
-    isDoctor: true,
-    specialty: 'Cardiology',
-    experience: '10 years',
+    bio: userData?.bio || `Healthcare ${role || 'user'}`,
+    posts: userData?.stats?.postsCount || 0,
+    followers: userData?.stats?.followersCount || 0,
+    following: userData?.stats?.followingCount || 0,
+    verified: userData?.verificationStatus === 'verified',
+    isDoctor: role === 'doctor',
+    specialty: userData?.specialization || '',
+    experience: userData?.experience || '',
   };
 
   const posts = [
@@ -206,9 +364,85 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  // Navigation helper function - handles navigation to tabs
+  const navigateToTab = (tabName) => {
+    try {
+      console.log('🔄 Navigating to tab:', tabName);
+      
+      // Check if we're inside MainTabs navigator
+      const parent = navigation.getParent();
+      if (parent) {
+        // If we're inside MainTabs, navigate within tabs
+        console.log('📍 Inside MainTabs, navigating to:', tabName);
+        navigation.navigate(tabName);
+      } else {
+        // If we're in Stack navigator, navigate to MainTabs with the tab
+        console.log('📍 In Stack navigator, navigating to MainTabs ->', tabName);
+        navigation.navigate('MainTabs', { screen: tabName });
+      }
+    } catch (error) {
+      console.error('❌ Navigation error:', error);
+      // Fallback: try using global navigation ref
+      try {
+        if (navigationRef?.isReady()) {
+          navigationRef.navigate('MainTabs', { screen: tabName });
+        } else {
+          // Last resort: direct navigation
+          navigation.navigate(tabName);
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback navigation also failed:', fallbackError);
+      }
+    }
+  };
+
+  // Use React.useEffect to set header options when inside MainTabs
+  React.useEffect(() => {
+    if (isInsideMainTabs) {
+      // Hide the default header title, but keep notification/message icons
+      navigation.setOptions({
+        headerTitle: '', // Hide title
+        headerShown: true, // Keep header visible for icons
+      });
+    }
+  }, [isInsideMainTabs, navigation]);
+
+  // Debug log to verify the check is working
+  console.log('🔍 ProfileScreen: isInsideMainTabs =', isInsideMainTabs);
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      {/* Only show custom top header if NOT inside MainTabs */}
+      {!isInsideMainTabs && (
+        <View style={styles.topHeader}>
+          <View style={styles.topHeaderLeft}>
+            <Text style={styles.topHeaderTitle}>Profile</Text>
+          </View>
+          <View style={styles.topHeaderRight}>
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={() => navigation.navigate('Notifications')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={28} color="#000" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={() => navigation.navigate('Messages')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={28} color="#000" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Scrollable Content */}
+      <ScrollView 
+        style={[styles.scrollContent, !isInsideMainTabs && styles.scrollContentWithCustomHeader]} 
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
         <View style={styles.profileHeader}>
           <Text style={styles.avatar}>{user.avatar}</Text>
           <View style={styles.profileInfo}>
@@ -251,6 +485,15 @@ const ProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         <View style={styles.actionButtons}>
+          {role === 'doctor' && (
+            <TouchableOpacity
+              style={styles.doctorBoardButton}
+              onPress={() => navigation.navigate('DoctorBoard')}
+            >
+              <Ionicons name="medical-outline" size={16} color="#007AFF" />
+              <Text style={styles.doctorBoardButtonText}>Doctor Board</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={() => navigation.navigate('Consult')}
@@ -260,29 +503,47 @@ const ProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.logoutButton}
-            onPress={async () => {
+            onPress={() => {
+              console.log('🔴🔴🔴 LOGOUT BUTTON PRESSED - Time:', new Date().toISOString());
+              
               Alert.alert(
                 'Logout',
                 'Are you sure you want to logout?',
                 [
-                  { text: 'Cancel', style: 'cancel' },
+                  { 
+                    text: 'Cancel', 
+                    style: 'cancel',
+                    onPress: () => console.log('❌ Logout cancelled')
+                  },
                   {
                     text: 'Logout',
                     style: 'destructive',
-                    onPress: async () => {
-                      try {
-                        await signOut(auth);
-                      } catch (error) {
-                        Alert.alert('Error', error.message);
-                      }
+                    onPress: () => {
+                      console.log('✅ User clicked Logout in alert - calling executeLogout()');
+                      executeLogout();
                     },
                   },
-                ]
+                ],
+                { cancelable: true }
               );
             }}
+            activeOpacity={0.7}
           >
             <Ionicons name="log-out-outline" size={18} color="#ff3b30" />
             <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
+          
+          {/* TEST BUTTON - Direct logout without alert for debugging */}
+          <TouchableOpacity
+            style={[styles.logoutButton, { backgroundColor: '#ff3b30', marginTop: 10, borderColor: '#ff3b30' }]}
+            onPress={() => {
+              console.log('🧪🧪🧪 TEST LOGOUT BUTTON PRESSED - Direct logout (no alert)');
+              executeLogout();
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out" size={18} color="#fff" />
+            <Text style={[styles.logoutButtonText, { color: '#fff' }]}>TEST LOGOUT (No Alert)</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -359,7 +620,62 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Only show custom bottom tab bar if NOT inside MainTabs */}
+      {!isInsideMainTabs && (
+        <View style={styles.bottomTabBar}>
+          <TouchableOpacity
+            style={styles.bottomTabItem}
+            onPress={() => navigateToTab('Home')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="home-outline" size={24} color="#666" />
+            <Text style={styles.bottomTabLabel}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bottomTabItem}
+            onPress={() => navigateToTab('Explore')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="compass-outline" size={24} color="#666" />
+            <Text style={styles.bottomTabLabel}>Explore</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bottomTabItem}
+            onPress={() => navigateToTab('Consult')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="medical-outline" size={24} color="#666" />
+            <Text style={styles.bottomTabLabel}>Consult</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bottomTabItem}
+            onPress={() => navigateToTab('Medicine')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="medkit-outline" size={24} color="#666" />
+            <Text style={styles.bottomTabLabel}>Medicine</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bottomTabItem}
+            onPress={() => navigateToTab('Donor')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="water-outline" size={24} color="#666" />
+            <Text style={styles.bottomTabLabel}>Donor</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bottomTabItem, styles.bottomTabItemActive]}
+            onPress={() => {}}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person" size={24} color="#007AFF" />
+            <Text style={[styles.bottomTabLabel, styles.bottomTabLabelActive]}>Profile</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 };
 
@@ -367,6 +683,43 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  // Top Header Styles
+  topHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    paddingTop: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    zIndex: 1000,
+    elevation: 5,
+  },
+  topHeaderLeft: {
+    flex: 1,
+  },
+  topHeaderTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+  },
+  topHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15,
+  },
+  headerIconButton: {
+    padding: 5,
+  },
+  // Scrollable Content
+  scrollContent: {
+    flex: 1,
+  },
+  scrollContentWithCustomHeader: {
+    // Additional padding when custom header is shown
   },
   header: {
     padding: 15,
@@ -453,6 +806,24 @@ const styles = StyleSheet.create({
   actionButtons: {
     marginTop: 10,
     gap: 10,
+  },
+  doctorBoardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  doctorBoardButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   primaryButton: {
     flexDirection: 'row',
@@ -680,6 +1051,37 @@ const styles = StyleSheet.create({
   emptyCollectionText: {
     fontSize: 14,
     color: '#999',
+  },
+  // Bottom Tab Bar Styles
+  bottomTabBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingBottom: 20,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    zIndex: 1000,
+    elevation: 5,
+  },
+  bottomTabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    paddingVertical: 5,
+  },
+  bottomTabItemActive: {
+    // Active state styling
+  },
+  bottomTabLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+  },
+  bottomTabLabelActive: {
+    color: '#007AFF',
+    fontWeight: '600',
   },
 });
 

@@ -15,7 +15,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useUser } from '../contexts/UserContext';
+import { useAuth } from '../contexts/AuthContext';
 import {
   subscribeToDoctorConsultations,
   getDoctorTodayStats,
@@ -25,7 +25,7 @@ import {
 const { width } = Dimensions.get('window');
 
 const DoctorHomeScreen = ({ navigation }) => {
-  const { user, userData } = useUser();
+  const { user, userData } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [upcomingConsultations, setUpcomingConsultations] = useState([]);
   const [todayStats, setTodayStats] = useState({
