@@ -241,16 +241,16 @@ const HospitalBookingScreen = ({ navigation }) => {
         <View style={styles.hospitalHeader}>
           <Text style={styles.hospitalName}>{item.name}</Text>
           <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={16} color="#ffc107" />
+            <Ionicons name="star" size={14} color="#ffc107" />
             <Text style={styles.rating}>{item.rating}</Text>
           </View>
         </View>
         <View style={styles.hospitalDetails}>
-          <Ionicons name="location" size={14} color="#666" />
+          <Ionicons name="location" size={12} color="#666" />
           <Text style={styles.address}>{item.address}</Text>
         </View>
         <View style={styles.hospitalDetails}>
-          <Ionicons name="walk" size={14} color="#666" />
+          <Ionicons name="walk" size={12} color="#666" />
           <Text style={styles.distance}>{item.distance}</Text>
         </View>
         <View style={styles.specialtiesContainer}>
@@ -477,23 +477,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 15,
+    padding: 12,
+    paddingTop: 15,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    margin: 15,
-    paddingHorizontal: 15,
-    borderRadius: 25,
-    height: 45,
+    margin: 10,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    height: 40,
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
@@ -506,76 +508,76 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   hospitalsList: {
-    padding: 15,
+    padding: 10,
   },
   hospitalCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 15,
+    borderRadius: 10,
+    marginBottom: 10,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   hospitalImage: {
     width: '100%',
-    height: 200,
+    height: 120,
     resizeMode: 'cover',
   },
   hospitalInfo: {
-    padding: 15,
+    padding: 10,
   },
   hospitalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   hospitalName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     flex: 1,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
   rating: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
   hospitalDetails: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
-    gap: 6,
+    marginBottom: 4,
+    gap: 4,
   },
   address: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     flex: 1,
   },
   distance: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
   },
   specialtiesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 10,
-    gap: 8,
+    marginTop: 6,
+    gap: 6,
   },
   specialtyTag: {
     backgroundColor: '#e3f2fd',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   specialtyText: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#007AFF',
     fontWeight: '600',
   },
@@ -597,7 +599,7 @@ const styles = StyleSheet.create({
   },
   profileImage: {
     width: width,
-    height: width,
+    height: width * 0.5,
     resizeMode: 'cover',
   },
   profileInfo: {

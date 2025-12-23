@@ -844,7 +844,7 @@ const HomeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#fff',
   },
   bannerContainer: {
     height: BANNER_HEIGHT,
@@ -935,8 +935,7 @@ const styles = StyleSheet.create({
   quickActionsContainer: {
     backgroundColor: '#fff',
     paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomWidth: 0,
   },
   quickActionsList: {
     paddingHorizontal: 15,
@@ -966,8 +965,7 @@ const styles = StyleSheet.create({
   horizontalSection: {
     backgroundColor: '#fff',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomWidth: 0,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1139,13 +1137,12 @@ const styles = StyleSheet.create({
   },
   feedContainer: {
     backgroundColor: '#fff',
-    marginTop: 10,
+    marginTop: 0,
   },
   feedPost: {
     backgroundColor: '#fff',
     marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomWidth: 0,
     paddingBottom: 10,
   },
   postHeader: {

@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRoute, useFocusEffect } from '@react-navigation/native';
+import { useRoute, useFocusEffect, useNavigationContainerRef } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { navigationRef } from '../utils/navigationRef';
 
@@ -23,31 +23,124 @@ const ProfileScreen = ({ navigation }) => {
   
   const route = useRoute();
   
-  // IMMEDIATE synchronous check - computed on EVERY render (not memoized)
-  // This ensures it's always accurate regardless of timing or navigation changes
-  const isInsideMainTabs = (() => {
+  // AGGRESSIVE check: Default to hiding custom UI unless we're CERTAIN we're not in MainTabs
+  // This prevents duplicate bottom tab bars
+  const checkIfInsideMainTabs = React.useCallback(() => {
     try {
       const parent = navigation.getParent();
       if (!parent) {
+        // No parent = we're a standalone screen, show custom UI
         return false;
       }
       
       const parentState = parent.getState();
-      if (!parentState || !parentState.routes || parentState.routes.length === 0) {
-        return false;
+      if (!parentState || !parentState.routes) {
+        // Can't determine - default to hiding custom UI to prevent duplicates
+        return true;
       }
       
       const routeNames = parentState.routes.map(r => r.name);
       
-      // MainTabs MUST have ALL these 6 routes - this is the definitive check
+      // MainTabs has exactly these 6 routes - definitive check
       const requiredRoutes = ['Home', 'Explore', 'Profile', 'Consult', 'Medicine', 'Donor'];
       const hasAllRoutes = requiredRoutes.every(routeName => routeNames.includes(routeName));
+      const hasCorrectCount = routeNames.length === 6;
       
-      return hasAllRoutes;
-    } catch (e) {
+      // If we have all routes and correct count, we're definitely in MainTabs
+      if (hasAllRoutes && hasCorrectCount) {
+        return true;
+      }
+      
+      // If we have at least 3 of the MainTabs routes, assume we're in MainTabs
+      // This is safer to prevent duplicates
+      const matchingRoutes = requiredRoutes.filter(routeName => routeNames.includes(routeName));
+      if (matchingRoutes.length >= 3) {
+        return true;
+      }
+      
+      // If route name is 'Profile' and parent has any MainTabs routes, assume MainTabs
+      if (route?.name === 'Profile' && (routeNames.includes('Home') || routeNames.includes('Explore'))) {
+        return true;
+      }
+      
+      // Only return false if we're absolutely certain we're NOT in MainTabs
+      // (i.e., parent has completely different routes)
       return false;
+    } catch (e) {
+      console.error('❌ Error checking isInsideMainTabs:', e);
+      // On error, default to TRUE (hide custom UI) to prevent duplicates
+      return true;
     }
+  }, [navigation, route?.name]);
+  
+  // IMMEDIATE check on every render - this is the primary source of truth
+  // This runs synchronously before any async state updates
+  const isInsideMainTabsNow = checkIfInsideMainTabs();
+  
+  // State to track if inside MainTabs - used as backup and for force updates
+  const [isInsideMainTabsState, setIsInsideMainTabsState] = React.useState(isInsideMainTabsNow);
+  
+  // Update state immediately if check changed
+  React.useEffect(() => {
+    if (isInsideMainTabsNow !== isInsideMainTabsState) {
+      setIsInsideMainTabsState(isInsideMainTabsNow);
+      console.log('🔍 State sync: Updated to:', isInsideMainTabsNow);
+    }
+  }, [isInsideMainTabsNow, isInsideMainTabsState]);
+  
+  // Use the immediate check OR state - if either says we're in MainTabs, hide custom UI
+  // This is safer: err on the side of hiding to prevent duplicates
+  // FORCE to true if either check is true, or if we're uncertain
+  const isInsideMainTabs = isInsideMainTabsNow || isInsideMainTabsState;
+  
+  // FINAL SAFEGUARD: If we're on Profile route and have a parent with multiple routes,
+  // assume we're in MainTabs (better to hide than show duplicate)
+  const finalCheck = (() => {
+    if (isInsideMainTabs) return true;
+    
+    // Additional safety check
+    try {
+      const parent = navigation.getParent();
+      if (parent && route?.name === 'Profile') {
+        const parentState = parent.getState();
+        if (parentState?.routes && parentState.routes.length > 1) {
+          // If we have a parent with multiple routes and we're on Profile, likely in MainTabs
+          return true;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+    
+    return isInsideMainTabs;
   })();
+  
+  // Update on focus (when tab is clicked) - CRITICAL for catching tab switches
+  useFocusEffect(
+    useCallback(() => {
+      const check = checkIfInsideMainTabs();
+      setIsInsideMainTabsState(check);
+      console.log('🔍 useFocusEffect: Tab focused, set to:', check);
+    }, [checkIfInsideMainTabs])
+  );
+  
+  // Update when route changes
+  React.useEffect(() => {
+    const check = checkIfInsideMainTabs();
+    setIsInsideMainTabsState(check);
+    console.log('🔍 Route effect: Updated to:', check);
+  }, [checkIfInsideMainTabs, route?.key, route?.name]);
+  
+  // Listen to navigation state changes
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener('state', () => {
+      const check = checkIfInsideMainTabs();
+      setIsInsideMainTabsState(check);
+      console.log('🔍 Navigation listener: Updated to:', check);
+    });
+    
+    return unsubscribe;
+  }, [navigation, checkIfInsideMainTabs]);
   
   // Handle logout - SIMPLIFIED DIRECT LOGOUT
   const handleLogout = async () => {
@@ -324,6 +417,7 @@ const ProfileScreen = ({ navigation }) => {
     if (activeTab === 'posts') {
       return (
         <FlatList
+          key={`posts-${activeTab}`}
           data={posts}
           renderItem={renderGridItem}
           keyExtractor={(item) => item.id}
@@ -335,6 +429,7 @@ const ProfileScreen = ({ navigation }) => {
     } else if (activeTab === 'reels') {
       return (
         <FlatList
+          key={`reels-${activeTab}`}
           data={reels}
           renderItem={renderReelItem}
           keyExtractor={(item) => item.id}
@@ -346,6 +441,7 @@ const ProfileScreen = ({ navigation }) => {
     } else if (activeTab === 'articles') {
       return (
         <FlatList
+          key={`articles-${activeTab}`}
           data={articles}
           renderItem={renderArticleItem}
           keyExtractor={(item) => item.id}
@@ -355,6 +451,7 @@ const ProfileScreen = ({ navigation }) => {
     } else if (activeTab === 'saved') {
       return (
         <FlatList
+          key={`saved-${activeTab}`}
           data={savedCollections}
           renderItem={renderSavedCollection}
           keyExtractor={(item) => item.id}
@@ -407,39 +504,45 @@ const ProfileScreen = ({ navigation }) => {
     }
   }, [isInsideMainTabs, navigation]);
 
+  // Use the final check - it runs on every render
+  // This ensures we always hide custom UI when inside MainTabs
+  const shouldHideCustomUI = finalCheck;
+  
   // Debug log to verify the check is working
-  console.log('🔍 ProfileScreen: isInsideMainTabs =', isInsideMainTabs);
+  console.log('🔍 ProfileScreen Render:', {
+    isInsideMainTabsNow,
+    isInsideMainTabsState,
+    isInsideMainTabs,
+    finalCheck,
+    shouldHideCustomUI,
+    willShowBottomTabBar: !shouldHideCustomUI,
+    routeName: route?.name,
+    routeKey: route?.key,
+    parentRoutes: (() => {
+      try {
+        const parent = navigation.getParent();
+        return parent?.getState()?.routes?.map(r => r.name) || [];
+      } catch (e) {
+        return [];
+      }
+    })(),
+  });
 
   return (
     <View style={styles.container}>
       {/* Only show custom top header if NOT inside MainTabs */}
-      {!isInsideMainTabs && (
+      {/* Removed notification and message icons - MainTabs header already provides them */}
+      {!shouldHideCustomUI && (
         <View style={styles.topHeader}>
           <View style={styles.topHeaderLeft}>
             <Text style={styles.topHeaderTitle}>Profile</Text>
-          </View>
-          <View style={styles.topHeaderRight}>
-            <TouchableOpacity
-              style={styles.headerIconButton}
-              onPress={() => navigation.navigate('Notifications')}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="notifications-outline" size={28} color="#000" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.headerIconButton}
-              onPress={() => navigation.navigate('Messages')}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={28} color="#000" />
-            </TouchableOpacity>
           </View>
         </View>
       )}
 
       {/* Scrollable Content */}
       <ScrollView 
-        style={[styles.scrollContent, !isInsideMainTabs && styles.scrollContentWithCustomHeader]} 
+        style={[styles.scrollContent, !shouldHideCustomUI && styles.scrollContentWithCustomHeader]} 
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -623,7 +726,9 @@ const ProfileScreen = ({ navigation }) => {
       </ScrollView>
 
       {/* Only show custom bottom tab bar if NOT inside MainTabs */}
-      {!isInsideMainTabs && (
+      {/* CRITICAL: This check runs on every render to prevent duplicate bottom tabs */}
+      {/* FORCE HIDE if inside MainTabs - use null to completely remove from DOM */}
+      {!shouldHideCustomUI ? (
         <View style={styles.bottomTabBar}>
           <TouchableOpacity
             style={styles.bottomTabItem}
@@ -674,7 +779,7 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={[styles.bottomTabLabel, styles.bottomTabLabelActive]}>Profile</Text>
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
     </View>
   );
 };
