@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../src/firebase';
 
 const DoctorProfileScreen = ({ route, navigation }) => {
   const { doctor } = route.params || {
@@ -28,6 +30,48 @@ const DoctorProfileScreen = ({ route, navigation }) => {
   };
 
   const [isFollowing, setIsFollowing] = useState(false);
+  const [doctorStatus, setDoctorStatus] = useState({
+    online: false,
+    lastActiveAt: null,
+  });
+
+  // Real-time listener for doctor online status
+  useEffect(() => {
+    if (!doctor?.id) return;
+    
+    const doctorRef = doc(db, 'doctors', doctor.id);
+    const unsubscribe = onSnapshot(doctorRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setDoctorStatus({
+          online: data.online === true,
+          lastActiveAt: data.lastActiveAt?.toDate?.() || data.lastActiveAt || null,
+        });
+      }
+    }, (error) => {
+      console.error('Error listening to doctor status:', error);
+    });
+
+    return () => unsubscribe();
+  }, [doctor?.id]);
+
+  // Format last active time
+  const formatLastActive = (lastActiveAt) => {
+    if (!lastActiveAt) return 'Never';
+    
+    const now = new Date();
+    const lastActive = lastActiveAt instanceof Date ? lastActiveAt : new Date(lastActiveAt);
+    const diffMs = now - lastActive;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} minutes ago`;
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return lastActive.toLocaleDateString();
+  };
 
   const posts = [
     { id: '1', image: 'https://via.placeholder.com/300', likes: 234 },
@@ -57,7 +101,12 @@ const DoctorProfileScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
       <View style={styles.profileSection}>
-        <Text style={styles.avatar}>{doctor.avatar}</Text>
+        <View style={styles.avatarContainer}>
+          <Text style={styles.avatar}>{doctor.avatar}</Text>
+          {doctorStatus.online && (
+            <View style={styles.onlineIndicator} />
+          )}
+        </View>
         <View style={styles.nameRow}>
           <Text style={styles.name}>{doctor.name}</Text>
           {doctor.verified && (
@@ -65,6 +114,19 @@ const DoctorProfileScreen = ({ route, navigation }) => {
           )}
         </View>
         <Text style={styles.specialty}>{doctor.specialty}</Text>
+        <View style={styles.availabilitySection}>
+          <View style={[styles.statusBadge, doctorStatus.online ? styles.statusOnline : styles.statusOffline]}>
+            <View style={[styles.statusDot, { backgroundColor: doctorStatus.online ? '#34C759' : '#999' }]} />
+            <Text style={styles.statusText}>
+              {doctorStatus.online ? 'Online' : 'Offline'}
+            </Text>
+          </View>
+          {!doctorStatus.online && doctorStatus.lastActiveAt && (
+            <Text style={styles.lastActiveText}>
+              Last active: {formatLastActive(doctorStatus.lastActiveAt)}
+            </Text>
+          )}
+        </View>
         <View style={styles.ratingContainer}>
           <Ionicons name="star" size={18} color="#FFD700" />
           <Text style={styles.rating}>{doctor.rating}</Text>
@@ -154,9 +216,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 15,
+  },
   avatar: {
     fontSize: 80,
-    marginBottom: 15,
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#34C759',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  availabilitySection: {
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 4,
+  },
+  statusOnline: {
+    backgroundColor: '#E8F5E9',
+  },
+  statusOffline: {
+    backgroundColor: '#F5F5F5',
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  lastActiveText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
   },
   nameRow: {
     flexDirection: 'row',

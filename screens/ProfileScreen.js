@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,7 +25,7 @@ const ProfileScreen = ({ navigation }) => {
   
   // AGGRESSIVE check: Default to hiding custom UI unless we're CERTAIN we're not in MainTabs
   // This prevents duplicate bottom tab bars
-  const checkIfInsideMainTabs = React.useCallback(() => {
+  const checkIfInsideMainTabs = useCallback(() => {
     try {
       const parent = navigation.getParent();
       if (!parent) {
@@ -78,10 +78,10 @@ const ProfileScreen = ({ navigation }) => {
   const isInsideMainTabsNow = checkIfInsideMainTabs();
   
   // State to track if inside MainTabs - used as backup and for force updates
-  const [isInsideMainTabsState, setIsInsideMainTabsState] = React.useState(isInsideMainTabsNow);
+  const [isInsideMainTabsState, setIsInsideMainTabsState] = useState(isInsideMainTabsNow);
   
   // Update state immediately if check changed
-  React.useEffect(() => {
+  useEffect(() => {
     if (isInsideMainTabsNow !== isInsideMainTabsState) {
       setIsInsideMainTabsState(isInsideMainTabsNow);
       console.log('🔍 State sync: Updated to:', isInsideMainTabsNow);
@@ -125,14 +125,14 @@ const ProfileScreen = ({ navigation }) => {
   );
   
   // Update when route changes
-  React.useEffect(() => {
+  useEffect(() => {
     const check = checkIfInsideMainTabs();
     setIsInsideMainTabsState(check);
     console.log('🔍 Route effect: Updated to:', check);
   }, [checkIfInsideMainTabs, route?.key, route?.name]);
   
   // Listen to navigation state changes
-  React.useEffect(() => {
+  useEffect(() => {
     const unsubscribe = navigation.addListener('state', () => {
       const check = checkIfInsideMainTabs();
       setIsInsideMainTabsState(check);
@@ -141,7 +141,14 @@ const ProfileScreen = ({ navigation }) => {
     
     return unsubscribe;
   }, [navigation, checkIfInsideMainTabs]);
-  
+
+  // Force re-render when profilePhoto changes for real-time updates
+  useEffect(() => {
+    if (userData?.profilePhoto) {
+      console.log('🖼️ ProfileScreen: Profile photo detected:', userData.profilePhoto.substring(0, 50) + '...');
+    }
+  }, [userData?.profilePhoto, userData?.name]);
+
   // Handle logout - SIMPLIFIED DIRECT LOGOUT
   const handleLogout = async () => {
     console.log('🚪🚪🚪 LOGOUT BUTTON CLICKED - Starting logout NOW');
@@ -306,49 +313,61 @@ const ProfileScreen = ({ navigation }) => {
     },
   ];
 
-  // Get user data from AuthContext
-  const user = {
-    name: userName || 'User',
-    username: `@${userEmail?.split('@')[0] || 'user'}`,
-    email: userEmail || '',
-    role: role || 'patient',
-    avatar: '👤',
-    bio: userData?.bio || `Healthcare ${role || 'user'}`,
+  // Get user data from AuthContext - with safe defaults
+  // This will update in real-time when EditProfileScreen saves changes
+  const user = useMemo(() => ({
+    name: userName || userData?.name || 'User',
+    username: `@${userEmail?.split('@')[0] || userData?.email?.split('@')[0] || 'user'}`,
+    email: userEmail || userData?.email || '',
+    role: role || userData?.role || 'patient',
+    avatar: userData?.name?.charAt(0)?.toUpperCase() || '👤',
+    bio: userData?.bio || `Healthcare ${role || userData?.role || 'user'}`,
+    phone: userData?.phone || '',
+    address: userData?.address || '',
+    city: userData?.city || '',
+    state: userData?.state || '',
+    pincode: userData?.pincode || '',
+    profilePhoto: userData?.profilePhoto || userData?.photoURL || null,
     posts: userData?.stats?.postsCount || 0,
     followers: userData?.stats?.followersCount || 0,
     following: userData?.stats?.followingCount || 0,
-    verified: userData?.verificationStatus === 'verified',
-    isDoctor: role === 'doctor',
+    verified: userData?.verificationStatus === 'verified' || userData?.verified === true,
+    isDoctor: role === 'doctor' || userData?.role === 'doctor',
     specialty: userData?.specialization || '',
     experience: userData?.experience || '',
-  };
+    hospitalName: userData?.hospitalName || '',
+    consultationFee: userData?.consultationFee || 0,
+    age: userData?.age || null,
+    gender: userData?.gender || '',
+    bloodGroup: userData?.bloodGroup || '',
+  }), [userName, userEmail, userData, role]);
 
   const posts = [
-    { id: '1', image: 'https://via.placeholder.com/300', likes: 234, comments: 12 },
-    { id: '2', image: 'https://via.placeholder.com/300', likes: 567, comments: 34 },
-    { id: '3', image: 'https://via.placeholder.com/300', likes: 123, comments: 8 },
-    { id: '4', image: 'https://via.placeholder.com/300', likes: 890, comments: 45 },
-    { id: '5', image: 'https://via.placeholder.com/300', likes: 345, comments: 23 },
-    { id: '6', image: 'https://via.placeholder.com/300', likes: 678, comments: 56 },
+    { id: '1', image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?w=400&h=400&fit=crop', likes: 234, comments: 12 },
+    { id: '2', image: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400&h=400&fit=crop', likes: 567, comments: 34 },
+    { id: '3', image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=400&fit=crop', likes: 123, comments: 8 },
+    { id: '4', image: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=400&h=400&fit=crop', likes: 890, comments: 45 },
+    { id: '5', image: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=400&h=400&fit=crop', likes: 345, comments: 23 },
+    { id: '6', image: 'https://images.unsplash.com/photo-1551601651-2a8555f1a136?w=400&h=400&fit=crop', likes: 678, comments: 56 },
   ];
 
   const reels = [
-    { id: '1', image: 'https://via.placeholder.com/300', views: 1234 },
-    { id: '2', image: 'https://via.placeholder.com/300', views: 5678 },
-    { id: '3', image: 'https://via.placeholder.com/300', views: 2345 },
+    { id: '1', image: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=400&h=400&fit=crop', views: 1234 },
+    { id: '2', image: 'https://images.unsplash.com/photo-1559757175-0eb30cd8c063?w=400&h=400&fit=crop', views: 5678 },
+    { id: '3', image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=400&fit=crop', views: 2345 },
   ];
 
   const articles = [
     {
       id: '1',
       title: 'Understanding Heart Health',
-      image: 'https://via.placeholder.com/300',
+      image: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400&h=300&fit=crop',
       reads: 1234,
     },
     {
       id: '2',
       title: 'Daily Exercise Routine',
-      image: 'https://via.placeholder.com/300',
+      image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=300&fit=crop',
       reads: 890,
     },
   ];
@@ -493,8 +512,8 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  // Use React.useEffect to set header options when inside MainTabs
-  React.useEffect(() => {
+  // Use useEffect to set header options when inside MainTabs
+  useEffect(() => {
     if (isInsideMainTabs) {
       // Hide the default header title, but keep notification/message icons
       navigation.setOptions({
@@ -547,10 +566,22 @@ const ProfileScreen = ({ navigation }) => {
       >
         <View style={styles.header}>
         <View style={styles.profileHeader}>
-          <Text style={styles.avatar}>{user.avatar}</Text>
+          {user.profilePhoto && user.profilePhoto.trim() ? (
+            <Image 
+              source={{ uri: user.profilePhoto }} 
+              style={styles.avatarImage}
+              onError={() => {
+                console.log('Image failed to load, showing initial');
+              }}
+            />
+          ) : (
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatar}>{user.name?.charAt(0)?.toUpperCase() || '👤'}</Text>
+            </View>
+          )}
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.name}>{user.name}</Text>
+              <Text style={styles.name}>{user.name || 'User'}</Text>
               {user.verified && (
                 <Ionicons name="checkmark-circle" size={20} color="#007AFF" />
               )}
@@ -560,7 +591,7 @@ const ProfileScreen = ({ navigation }) => {
               <View style={styles.doctorBadge}>
                 <Ionicons name="medical" size={14} color="#007AFF" />
                 <Text style={styles.doctorText}>
-                  {user.specialty} • {user.experience}
+                  {user.specialty || 'Doctor'} • {user.experience || 0} years
                 </Text>
               </View>
             )}
@@ -568,7 +599,7 @@ const ProfileScreen = ({ navigation }) => {
         </View>
         <TouchableOpacity
           style={styles.editButton}
-          onPress={() => setShowEditModal(true)}
+          onPress={() => navigation.navigate('EditProfile')}
         >
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
@@ -604,49 +635,17 @@ const ProfileScreen = ({ navigation }) => {
             <Ionicons name="calendar" size={18} color="#fff" />
             <Text style={styles.primaryButtonText}>Book Consultation</Text>
           </TouchableOpacity>
+          {/* Logout Button - Direct logout without alert */}
           <TouchableOpacity
-            style={styles.logoutButton}
+            style={[styles.logoutButton, { backgroundColor: '#ff3b30', borderColor: '#ff3b30' }]}
             onPress={() => {
-              console.log('🔴🔴🔴 LOGOUT BUTTON PRESSED - Time:', new Date().toISOString());
-              
-              Alert.alert(
-                'Logout',
-                'Are you sure you want to logout?',
-                [
-                  { 
-                    text: 'Cancel', 
-                    style: 'cancel',
-                    onPress: () => console.log('❌ Logout cancelled')
-                  },
-                  {
-                    text: 'Logout',
-                    style: 'destructive',
-                    onPress: () => {
-                      console.log('✅ User clicked Logout in alert - calling executeLogout()');
-                      executeLogout();
-                    },
-                  },
-                ],
-                { cancelable: true }
-              );
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="log-out-outline" size={18} color="#ff3b30" />
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
-          
-          {/* TEST BUTTON - Direct logout without alert for debugging */}
-          <TouchableOpacity
-            style={[styles.logoutButton, { backgroundColor: '#ff3b30', marginTop: 10, borderColor: '#ff3b30' }]}
-            onPress={() => {
-              console.log('🧪🧪🧪 TEST LOGOUT BUTTON PRESSED - Direct logout (no alert)');
+              console.log('🧪🧪🧪 LOGOUT BUTTON PRESSED - Direct logout (no alert)');
               executeLogout();
             }}
             activeOpacity={0.7}
           >
             <Ionicons name="log-out" size={18} color="#fff" />
-            <Text style={[styles.logoutButtonText, { color: '#fff' }]}>TEST LOGOUT (No Alert)</Text>
+            <Text style={[styles.logoutButtonText, { color: '#fff' }]}>Logout</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -789,6 +788,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
   // Top Header Styles
   topHeader: {
     flexDirection: 'row',
@@ -833,9 +838,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 15,
   },
-  avatar: {
-    fontSize: 70,
+  avatarContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     marginRight: 15,
+    backgroundColor: '#e0e0e0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatar: {
+    fontSize: 35,
+    fontWeight: '600',
+    color: '#666',
+  },
+  avatarImage: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    marginRight: 15,
+    backgroundColor: '#e0e0e0',
+    borderWidth: 2,
+    borderColor: '#fff',
+    resizeMode: 'cover',
   },
   profileInfo: {
     flex: 1,

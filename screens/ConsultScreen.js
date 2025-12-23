@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 
 const ConsultScreen = ({ navigation }) => {
   const [selectedSpecialty, setSelectedSpecialty] = useState('all');
@@ -21,7 +23,7 @@ const ConsultScreen = ({ navigation }) => {
 
   const specialties = ['all', 'Cardiology', 'Dermatology', 'Neurology', 'Pediatrics', 'Orthopedics'];
 
-  const doctors = [
+  const [doctors, setDoctors] = useState([
     {
       id: '1',
       name: 'Dr. Sarah Johnson',
@@ -32,6 +34,8 @@ const ConsultScreen = ({ navigation }) => {
       experience: '10 years',
       verified: true,
       followers: 5678,
+      online: false,
+      lastActiveAt: null,
     },
     {
       id: '2',
@@ -43,6 +47,8 @@ const ConsultScreen = ({ navigation }) => {
       experience: '8 years',
       verified: true,
       followers: 8901,
+      online: false,
+      lastActiveAt: null,
     },
     {
       id: '3',
@@ -54,6 +60,8 @@ const ConsultScreen = ({ navigation }) => {
       experience: '12 years',
       verified: true,
       followers: 4567,
+      online: false,
+      lastActiveAt: null,
     },
     {
       id: '4',
@@ -65,8 +73,57 @@ const ConsultScreen = ({ navigation }) => {
       experience: '15 years',
       verified: true,
       followers: 12345,
+      online: false,
+      lastActiveAt: null,
     },
-  ];
+  ]);
+
+  // Real-time listener for doctor online status
+  useEffect(() => {
+    // Listen to all doctors' online status
+    const doctorsRef = collection(db, 'doctors');
+    const unsubscribe = onSnapshot(doctorsRef, (snapshot) => {
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const doctorId = docSnap.id;
+        
+        // Update doctor status if found in our list
+        setDoctors(prev => prev.map(doctor => {
+          // Match by user ID or name (for demo purposes)
+          if (doctor.id === doctorId || data.name?.includes(doctor.name.split(' ')[1])) {
+            return {
+              ...doctor,
+              online: data.online === true,
+              lastActiveAt: data.lastActiveAt?.toDate?.() || data.lastActiveAt || null,
+            };
+          }
+          return doctor;
+        }));
+      });
+    }, (error) => {
+      console.error('Error listening to doctors status:', error);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Format last active time
+  const formatLastActive = (lastActiveAt) => {
+    if (!lastActiveAt) return 'Never';
+    
+    const now = new Date();
+    const lastActive = lastActiveAt instanceof Date ? lastActiveAt : new Date(lastActiveAt);
+    const diffMs = now - lastActive;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return lastActive.toLocaleDateString();
+  };
 
   const filteredDoctors =
     selectedSpecialty === 'all'
@@ -95,7 +152,12 @@ const ConsultScreen = ({ navigation }) => {
       onPress={() => navigation.navigate('DoctorProfile', { doctor: item })}
     >
       <View style={styles.doctorHeader}>
-        <Text style={styles.doctorAvatar}>{item.avatar}</Text>
+        <View style={styles.avatarContainer}>
+          <Text style={styles.doctorAvatar}>{item.avatar}</Text>
+          {item.online && (
+            <View style={styles.onlineIndicator} />
+          )}
+        </View>
         <View style={styles.doctorInfo}>
           <View style={styles.doctorNameRow}>
             <Text style={styles.doctorName}>{item.name}</Text>
@@ -104,6 +166,19 @@ const ConsultScreen = ({ navigation }) => {
             )}
           </View>
           <Text style={styles.doctorSpecialty}>{item.specialty}</Text>
+          <View style={styles.availabilityRow}>
+            <View style={[styles.statusBadge, item.online ? styles.statusOnline : styles.statusOffline]}>
+              <View style={[styles.statusDot, { backgroundColor: item.online ? '#34C759' : '#999' }]} />
+              <Text style={styles.statusText}>
+                {item.online ? 'Online' : 'Offline'}
+              </Text>
+            </View>
+            {!item.online && item.lastActiveAt && (
+              <Text style={styles.lastActiveText}>
+                • {formatLastActive(item.lastActiveAt)}
+              </Text>
+            )}
+          </View>
           <View style={styles.doctorStats}>
             <View style={styles.statItem}>
               <Ionicons name="star" size={14} color="#FFD700" />
@@ -121,7 +196,14 @@ const ConsultScreen = ({ navigation }) => {
         <Text style={styles.detailText}>⏱️ {item.experience} experience</Text>
       </View>
       <TouchableOpacity
-        style={styles.bookButton}
+        style={[styles.bookButton, !item.online && styles.bookButtonDisabled]}
+        disabled={!item.online}
+        onPress={() => handleBookConsultation(item)}
+      >
+        <Text style={styles.bookButtonText}>
+          {item.online ? 'Book Consultation' : 'Currently Offline'}
+        </Text>
+      </TouchableOpacity>
         onPress={() => handleBookConsultation(item)}
       >
         <Text style={styles.bookButtonText}>Book Consultation</Text>
@@ -357,6 +439,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
+  },
+  bookButtonDisabled: {
+    backgroundColor: '#ccc',
+    opacity: 0.6,
   },
   bookButtonText: {
     color: '#fff',
